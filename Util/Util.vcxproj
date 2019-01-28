@@ -46,12 +46,14 @@
     <ClCompile Include="src\image_writer.cpp" />
     <ClCompile Include="src\ifile.cpp" />
     <ClCompile Include="src\time.cpp" />
+    <ClCompile Include="src\vec3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\image_writer.h" />
     <ClInclude Include="include\ifile.h" />
     <ClInclude Include="include\time.h" />
     <ClInclude Include="include\stb_image_write.h" />
+    <ClInclude Include="include\vec3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

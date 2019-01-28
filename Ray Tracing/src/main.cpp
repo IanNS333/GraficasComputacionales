@@ -1,6 +1,7 @@
 #include <vector>
+
 #include "image_writer.h"
-#include <random>
+#include "vec3.h"
 
 int main() {
 
@@ -11,13 +12,16 @@ int main() {
 
 	for (int i = 0; i < ny; i++) {
 		for (int j = 0; j < nx; j++) {
-			float r = float(j)/ float(nx);
-			float g = float(i)/ float(ny);
-			float b = 0;
 
-			pixels.push_back(int(255.99 * r));
-			pixels.push_back(int(255.99 * g));
-			pixels.push_back(int(255.99 * b));
+			vec3 pix = vec3(
+				float(j) / float(nx),	// red
+				float(i) / float(ny),	// green
+				0.2						// blue
+			);
+
+			pixels.push_back(int(255.99 * pix[0]));
+			pixels.push_back(int(255.99 * pix[1]));
+			pixels.push_back(int(255.99 * pix[2]));
 		}
 	}
 
