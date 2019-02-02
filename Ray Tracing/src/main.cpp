@@ -7,6 +7,8 @@
 #include <iostream>
 #include <fstream>
 #include <thread>
+#include <stdio.h>
+#include <mutex>
 
 #include "image_writer.h"
 #include "vec3.h"
@@ -27,6 +29,8 @@ using utils::cross;
 using utils::dot;
 using utils::random_point_in_unit_sphere;
 using utils::randf;
+using std::vector;
+using std::thread;
 
 vec3 color(const ray& r, const hitable * const world, int depth) {
 	hit_record rec;
@@ -35,7 +39,7 @@ vec3 color(const ray& r, const hitable * const world, int depth) {
 		ray scattered;
 		vec3 attenuation;
 		if (depth < 50 && rec.mat_ptr->scatter(r, rec, attenuation, scattered)) {
-			attenuation*color(scattered, world, depth + 1);
+			return attenuation*color(scattered, world, depth + 1);
 		}
 		else {
 			return vec3(0, 0, 0);
@@ -80,7 +84,7 @@ hitable *random_scene() {
 					list[i++] = new sphere(center, 0.2,
 						new metal(
 							vec3(
-								0.5*(1+randf()),
+								0.5*(1 + randf()),
 								0.5*(1 + randf()),
 								0.5*(1 + randf())
 							),
@@ -95,19 +99,23 @@ hitable *random_scene() {
 		}
 	}
 
-	list[i++] = new sphere(vec3(-6, 1, 0), 1.0, new dielectric(1.5));
+	list[i++] = new sphere(vec3(-10, 1, 1), 1.0, new dielectric(1.5));
+	list[i++] = new sphere(vec3(-6, 1, 0.5), 1.0, new dielectric(1.5));
 	list[i++] = new sphere(vec3(-2, 1, 0), 1.0, new dielectric(1.5));
-	list[i++] = new sphere(vec3(2, 1, 0), 1.0, new dielectric(1.5));
-	list[i++] = new sphere(vec3(6, 1, 0), 1.0, new dielectric(1.5));
+	list[i++] = new sphere(vec3(2, 1, -0.5), 1.0, new dielectric(1.5));
 
 	return new hitable_list(list, i);
 }
 
-const int nx = 300;
-const int ny = 200;
-const int ns = 20;
+int nx = 1920;
+int ny = 1080;
+int ns = 100;
+int rowCountCompleted = 0;
+std::mutex mtx;
+vector<unsigned char> pixels(nx*ny * 3);
 
-void calculatePixel(int i, int j, const camera& cam, hitable* world ,unsigned char& r, unsigned char& g,unsigned char& b) {
+
+vec3 calculatePixel(int i, int j, const camera& cam, hitable* world) {
 	vec3 pix(0, 0, 0);
 
 	for (int s = 0; s < ns; s++) {
@@ -121,16 +129,28 @@ void calculatePixel(int i, int j, const camera& cam, hitable* world ,unsigned ch
 
 	pix /= float(ns);
 
-	r = 255.99*sqrt(pix[0]);
-	g = 255.99*sqrt(pix[1]);
-	b = 255.99*sqrt(pix[2]);
+	pix[0] = 255.99*sqrt(pix[0]);
+	pix[1] = 255.99*sqrt(pix[1]);
+	pix[2] = 255.99*sqrt(pix[2]);
+
+	return pix;
+}
+
+void calculatePixelRow(int j, const camera& cam, hitable * world, int result_start) {
+	for (int i = 0; i < nx; i++) {
+		vec3 result = calculatePixel(i, j, cam, world);
+		pixels[result_start++] = result.r();
+		pixels[result_start++] = result.g();
+		pixels[result_start++] = result.b();
+	}
+	mtx.lock();
+	printf("%0.2f %% finished!\n", float(++rowCountCompleted)/float(ny) * 100);
+	mtx.unlock();
 }
 
 int main() {
 
 	time::init();
-
-	std::vector<unsigned char> pixels(nx*ny*3); 
 
 	hitable * world = random_scene();
 
@@ -140,21 +160,14 @@ int main() {
 	float dist_to_focus = 10;
 	float aperture = 0.1;
 
-	camera cam(lookfrom, lookat, vec3(0,1,0), 20, float(nx)/float(ny), 0.1, dist_to_focus);
-	
-	std::thread threads[nx*ny];
+	camera cam(lookfrom, lookat, vec3(0,1,0), 20, float(nx)/float(ny), aperture, dist_to_focus);
 
-	int count = 0;
-	int countChannels = 0;
+	vector<thread> threads(ny);
+
+	int threadCount = 0;
+
 	for (int j = 0; j < ny; j++) {
-		for (int i = 0; i < nx; i++) {
-			int a = countChannels++;
-			int b = countChannels++;
-			int c = countChannels++;
-			threads[count++] = std::thread([&](int a, int b, int c) {
-				calculatePixel(i, j, cam, world, pixels[a], pixels[b], pixels[c]);
-			}, a, b, c);
-		}
+		threads[threadCount++] = thread(calculatePixelRow, j, cam, world, j*nx * 3);
 	}
 
 	for (auto& t : threads) {

@@ -7,7 +7,7 @@
 
 #include "scene.h"
 #include "scene_compatibility.h"
-#include "time.h"
+#include "time_utils.h"
 
 std::vector<std::unique_ptr<scene>> scene_manager::sceneList;
 int scene_manager::currentScene = -1;

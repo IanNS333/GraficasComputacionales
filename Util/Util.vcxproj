@@ -72,9 +72,8 @@
   <ItemGroup>
     <ClCompile Include="src\image_writer.cpp" />
     <ClCompile Include="src\ifile.cpp" />
-    <ClCompile Include="src\time.cpp" />
+    <ClCompile Include="src\time_utils.cpp" />
     <ClCompile Include="src\utils.cpp" />
-    <ClCompile Include="src\vec3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\image_writer.h" />
