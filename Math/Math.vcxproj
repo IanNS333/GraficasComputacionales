@@ -11,10 +11,22 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\cgmath.h" />
     <ClInclude Include="include\complex.h" />
+    <ClInclude Include="include\mat3.h" />
+    <ClInclude Include="include\mat4.h" />
+    <ClInclude Include="include\vec2.h" />
+    <ClInclude Include="include\vec3.h" />
+    <ClInclude Include="include\vec4.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\cgmath.cpp" />
+    <ClCompile Include="src\mat3.cpp" />
+    <ClCompile Include="src\mat4.cpp" />
+    <ClCompile Include="src\vec2.cpp" />
     <ClCompile Include="src\complex.cpp" />
+    <ClCompile Include="src\vec3.cpp" />
+    <ClCompile Include="src\vec4.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
