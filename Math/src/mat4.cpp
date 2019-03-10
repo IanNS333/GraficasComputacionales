@@ -65,36 +65,48 @@ float mat4::determinant(const mat4& m) {
 	return result;
 }
 
+// Gauss-elimination method
 mat4 mat4::inverse(const mat4& original) {
-	mat4 result;
-	mat3 current;
-	int sign;
+	mat4 result(1);
+	mat4 m;
+	vec4 swap;
 
-	vector<int> is;
-	vector<int> js;
+	float actual;
 
-	float det = determinant(original);
+	for (int i = 0; i < 4; i++) {
+		m[i] = original[i];
+	}
 
-	for (int m = 0; m < 4; m++) {
+	for (int j = 0; j < 4; j++) {
+		if (m[j][j] == 0) {
+			for (int i = 0; i < 4; i++) {
+				if (m[i][j] != 0) {
 
-		is = { 0,1,2,3 };
-		is.erase(is.begin() + m);
+					swap = m[j];
+					m[j] = m[i];
+					m[i] = swap;
 
-		for (int n = 0; n < 4; n++) {
-			js = { 0,1,2,3 };
-			js.erase(js.begin() + n);
-
-			sign = (m + n) % 2 == 0 ? +1.0f : -1.0f;
-			current = mat3();
-
-			for(int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					current[i][j] = original[is[i]][js[j]];
+					swap = result[j];
+					result[j] = result[i];
+					result[i] = swap;
 				}
 			}
-
-			result[n][m] = sign * (mat3::determinant(current)) / det;
 		}
+		for (int i = 0; i < 4; i++) {
+			actual = m[i][j];
+			if (i == j) {
+				continue;
+			}
+			else {
+				m[i] -= (actual * m[j]) / m[j][j];
+				result[i] -= (actual * result[j]) / m[j][j];
+			}
+		}
+	}
+	for (int i = 0; i < 4; i++) {
+		actual = m[i][i];
+		m[i] /= actual;
+		result[i] /= actual;
 	}
 
 	return result;

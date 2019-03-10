@@ -7,7 +7,14 @@
 
 #include "scene.h"
 #include "scene_compatibility.h"
+#include "scene_primitives.h"
+#include "scene_chaikin.h"
+#include "scene_conchoid.h"
 #include "time_utils.h"
+#include "scene_vertex.h"
+#include "scene_fragment.h"
+#include "scene_circle_grid.h"
+#include "scene_sphere.h"
 
 std::vector<std::unique_ptr<scene>> scene_manager::sceneList;
 int scene_manager::currentScene = -1;
@@ -81,6 +88,21 @@ void scene_manager::initialize()
 	//sceneList.push_back(std::move(somescene));
 	
 	std::unique_ptr<scene> scene1(new scene_compatibility);
+	std::unique_ptr<scene> scene2(new scene_primitives);
+	std::unique_ptr<scene> scene3(new scene_chaikin);
+	std::unique_ptr<scene> scene4(new scene_conchoid);
+	std::unique_ptr<scene> scene5(new scene_vertex);
+	std::unique_ptr<scene> scene6(new scene_fragment);
+	std::unique_ptr<scene> scene7(new scene_circle_grid);
+	std::unique_ptr<scene> scene8(new scene_sphere);
+
+	sceneList.push_back(std::move(scene8));
+	sceneList.push_back(std::move(scene7));
+	sceneList.push_back(std::move(scene6));
+	sceneList.push_back(std::move(scene5));
+	sceneList.push_back(std::move(scene4));
+	sceneList.push_back(std::move(scene3));
+	sceneList.push_back(std::move(scene2));
 	sceneList.push_back(std::move(scene1));
 
 	for (auto& s : sceneList)
@@ -122,10 +144,10 @@ void scene_manager::resize(int width, int height)
 
 void scene_manager::normalKeysDown(unsigned char key, int x, int y)
 {
-	if (key == '+')
+	if (key == '+' || key == '.')
 		next();
 
-	if (key == '-')
+	if (key == '-' || key == ',')
 		prev();
 
 	if (key == 'r')

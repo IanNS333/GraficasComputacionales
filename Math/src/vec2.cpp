@@ -50,7 +50,7 @@ bool vec2::operator==(const vec2& v) const{
 }
 
 float vec2::magnitude() const{
-	return sqrtf(x*x + y * y);
+	return sqrtf(x * x + y * y);
 }
 
 void vec2::normalize(){

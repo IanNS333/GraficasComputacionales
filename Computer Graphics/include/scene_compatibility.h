@@ -4,6 +4,8 @@
 
 class scene_compatibility : public scene
 {
+private: 
+	float angle = 0.0f;
 public:
 	void init() { }
 	void awake();
