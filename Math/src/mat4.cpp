@@ -40,7 +40,6 @@ bool mat4::operator==(const mat4& m) const {
 
 float mat4::determinant(const mat4& m) {
 	float result = 0;
-	int sign;
 
 	vector<int> is;
 	vector<int> js = {1,2,3};

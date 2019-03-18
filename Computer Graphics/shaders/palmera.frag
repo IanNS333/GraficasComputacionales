@@ -14,11 +14,14 @@ void main() {
     vec3 color = mix(
         vec3(1.0, 0.4, 0.1), 
         vec3(0.298, 0.4275, 1.0),
-        sqrt(p.y));
+        sqrt(p.y)
+	);
 
-    float r = 0.2 + 0.1 * 
-    cos(atan(q.y, q.x) * 10. + 
-        20.0*(0.75 + 0.25 * cos(u_time)) * q.x); 
+    float r = 
+		0.2 + 
+		0.1 * cos(atan(q.y, q.x) * 10. + 
+		20.0 * (0.75 + 0.25 * cos(u_time)) * q.x); 
+
     color *= smoothstep(r, r + 0.005, length(q));
 
     r = 0.015;
@@ -29,7 +32,6 @@ void main() {
         (1. - smoothstep(r, r + 0.002, 
             abs(q.x - 0.25 * sin(2.0 * q.y))))
         * (1. - smoothstep(0.0, 0.01, q.y));
-    // color *= 1.-
 
     FragColor = vec4(color, 1.0);
 }

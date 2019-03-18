@@ -6,7 +6,7 @@
 
 #include "ifile.h"
 
-GLuint scene::generateShaderProgram(std::vector<shader_file> shaders) {
+GLuint scene::generateShaderProgram(std::vector<shader_file> shaders, std::vector<std::string> variables) {
 	
 	ifile file;
 
@@ -40,6 +40,12 @@ GLuint scene::generateShaderProgram(std::vector<shader_file> shaders) {
 
 		glAttachShader(shader_program, shader_id);
 		shaderIds.push_back(shader_id);
+	}
+
+	int index = 0;
+	for (auto variable : variables) {
+		glBindAttribLocation(shader_program, index, variable.c_str());
+		index++;
 	}
 
 	// Deberiamos de verificar que el proceso de linkeo termine sin errores.

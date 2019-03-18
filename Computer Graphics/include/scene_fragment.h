@@ -26,8 +26,8 @@ private:
 	GLuint positionsVBO;
 	GLuint indicesBuffer;
 
-	int width= 200;
-	int height = 200;
+	GLuint time_location;
+	GLuint resolution_location;
 
 	void compile_shaders();
 };

@@ -12,7 +12,7 @@ void scene_circle_grid::compile_shaders()
 	shader_program = generateShaderProgram({
 		{ "shaders/circle_grid.vert", GL_VERTEX_SHADER},
 		{ "shaders/solid_color.frag", GL_FRAGMENT_SHADER },
-		});
+	});
 }
 
 void scene_circle_grid::init()

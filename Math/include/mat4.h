@@ -11,10 +11,10 @@ using std::ostream;
 namespace cgmath {
 
 class mat4 {
-	private:
+private:
 	float n[4][4] = { 0 };
 
-	public:
+public:
 	mat4();
 	mat4(float diagonal);
 	mat4(const vec4& c1, const vec4& c2, const vec4& c3, const vec4& c4);

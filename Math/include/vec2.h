@@ -7,33 +7,33 @@ using std::ostream;
 namespace cgmath {
 
 class vec2 {
-	public:
+public:
 		
-		vec2();
-		vec2(float x, float y);
+	vec2();
+	vec2(float x, float y);
 
-		float& operator[](int i);
-		const float& operator[](int i) const;
+	float& operator[](int i);
+	const float& operator[](int i) const;
 
-		vec2& operator*=(float s);
-		vec2& operator/=(float s);
+	vec2& operator*=(float s);
+	vec2& operator/=(float s);
 
-		vec2& operator+=(const vec2& v);
-		vec2& operator-=(const vec2& v);
+	vec2& operator+=(const vec2& v);
+	vec2& operator-=(const vec2& v);
 
-		bool operator==(const vec2& v) const;
+	bool operator==(const vec2& v) const;
 
-		float magnitude() const;
-		void normalize();
+	float magnitude() const;
+	void normalize();
 
-		static float magnitude(const vec2& v);
-		static vec2 normalize(const vec2& v);
-		static float dot(const vec2& v1, const vec2& v2);
+	static float magnitude(const vec2& v);
+	static vec2 normalize(const vec2& v);
+	static float dot(const vec2& v1, const vec2& v2);
 
-		friend ostream& operator<<(ostream& os, const vec2& v);
+	friend ostream& operator<<(ostream& os, const vec2& v);
 
-		float x;
-		float y;
+	float x;
+	float y;
 };
 
 

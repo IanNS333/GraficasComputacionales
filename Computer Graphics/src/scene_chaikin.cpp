@@ -3,7 +3,7 @@
 #include <vector>
 #include "vec2.h"
 
-float DOTTED_LINE_SIZE = 0.025;
+float DOTTED_LINE_SIZE = 0.025f;
 
 int min(int a, int b) {
 	return a < b ? a : b;
@@ -17,7 +17,7 @@ std::vector<vec2> scene_chaikin::createDottedLines(std::vector<vec2> points) {
 	std::vector<vec2> result;
 	vec2 a, b, c;
 	float magnitude;
-	for (int i = 0; i < points.size() - 1; i++) {
+	for (unsigned int i = 0; i < points.size() - 1; i++) {
 		a = points[i];
 		b = points[i+1];
 		c = b - a;
@@ -46,7 +46,7 @@ std::vector<vec2> scene_chaikin::chaikin(std::vector<vec2> points, int iteration
 		if (!isClosed) {
 			new_points.push_back(points[0]);
 		}
-		for (int i = 0; i < points.size() - 1; i++) {
+		for (unsigned int i = 0; i < points.size() - 1; i++) {
 			a = points[i];
 			b = points[i + 1];
 			one_fourth = a + (b - a) / 4.0f;
@@ -74,8 +74,8 @@ void normalize(std::vector<std::vector<vec2>> &originalSegments) {
 	int maxX= INT_MIN;
 	int maxY = INT_MIN;
 
-	for (int i = 0; i < originalSegments.size(); i++) {
-		for (int j = 0; j < originalSegments[i].size(); j++) {
+	for (unsigned int i = 0; i < originalSegments.size(); i++) {
+		for (unsigned int j = 0; j < originalSegments[i].size(); j++) {
 
 			minX = min(minX, (int)floorf(originalSegments[i][j].x));
 			minY= min(minY, (int)floorf(originalSegments[i][j].y));
@@ -87,8 +87,8 @@ void normalize(std::vector<std::vector<vec2>> &originalSegments) {
 
 	vec2 origin((minX + maxX) / 2.0f, (minY + maxY) / 2.0f);
 
-	for (int i = 0; i < originalSegments.size(); i++) {
-		for (int j = 0; j < originalSegments[i].size(); j++) {
+	for (unsigned int i = 0; i < originalSegments.size(); i++) {
+		for (unsigned int j = 0; j < originalSegments[i].size(); j++) {
 
 			originalSegments[i][j] -= origin;
 
@@ -100,8 +100,8 @@ void normalize(std::vector<std::vector<vec2>> &originalSegments) {
 		}
 	}
 
-	for (int i = 0; i < originalSegments.size(); i++) {
-		for (int j = 0; j < originalSegments[i].size(); j++) {
+	for (unsigned int i = 0; i < originalSegments.size(); i++) {
+		for (unsigned int j = 0; j < originalSegments[i].size(); j++) {
 			originalSegments[i][j].x = ((2 * (originalSegments[i][j].x - minimum)) / (maximum - minimum)) - 1;
 			originalSegments[i][j].y = ((2 * (originalSegments[i][j].y - minimum)) / (maximum - minimum)) - 1;
 		}
@@ -147,38 +147,7 @@ void scene_chaikin::sendVertexData() {
 
 void scene_chaikin::sendDottedData() {
 	for (int i = 0; i < segmentCount; i++) {
-		// Quiero empezar a trabajar con 
-		// el siguiente vao
-		glBindVertexArray(dottedVaos[i]);
-
-		// Quiero trabajar con el buffer 
-		// positionsVBO
-		glBindBuffer(GL_ARRAY_BUFFER, dottedVBOs[i]);
-
-		// Crea la memoria del buffer, 
-		// especifica los datos y la
-		// manda al GPU.
-		glBufferData(GL_ARRAY_BUFFER,
-			dottedSegments[i].size() * sizeof(cgmath::vec2),
-			dottedSegments[i].data(),
-			GL_DYNAMIC_DRAW
-		);
-
-		// Prende el atributo 0
-		glEnableVertexAttribArray(0);
-		// Voy a configurar el atributo 0
-		// Con 2 componentes
-		// de tipo float
-		// sin normalizar los datos
-		// desfazamiento entre los atributos de la lista
-		// Apuntador a los datos, si no los hemos mandado
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-
-		// Cuando haceos un bind con 0, 
-		// en realidad significa unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		// Unbind del vao
-		glBindVertexArray(0);
+		updateVBO(dottedVaos[i], dottedVBOs[i], 0, dottedSegments[i], 2, GL_FLOAT, GL_DYNAMIC_DRAW);
 	}
 }
 
@@ -202,7 +171,7 @@ void scene_chaikin::init() {
 	// Guarda el id en vao
 	glGenVertexArrays(segmentCount, vaos);
 	glGenVertexArrays(segmentCount, dottedVaos);
-
+	
 	// Crear un identificador para un
 	// Vertex Buffer Object
 	// Guarda el id en positionsVBO

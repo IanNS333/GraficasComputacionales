@@ -2,46 +2,15 @@
 
 #include "scene_conchoid.h"
 
-#include "vec2.h";
+#include "vec2.h"
 
 using cgmath::vec2;
 
-float POINT_DISTANCE = 0.01;
+float POINT_DISTANCE = 0.01f;
 
 void scene_conchoid::sendVertexData() {
 	for (int i = 0; i < 2; i++) {
-	// Quiero empezar a trabajar con 
-		// el siguiente vao
-		glBindVertexArray(vaos[i]);
-
-		// Quiero trabajar con el buffer 
-		// positionsVBO
-		glBindBuffer(GL_ARRAY_BUFFER, positionsVBOs[i]);
-
-		// Crea la memoria del buffer, 
-		// especifica los datos y la
-		// manda al GPU.
-		glBufferData(GL_ARRAY_BUFFER,
-			points[i].size() * sizeof(cgmath::vec2),
-			points[i].data(),
-			GL_DYNAMIC_DRAW
-		);
-
-		// Prende el atributo 0
-		glEnableVertexAttribArray(0);
-		// Voy a configurar el atributo 0
-		// Con 2 componentes
-		// de tipo float
-		// sin normalizar los datos
-		// desfazamiento entre los atributos de la lista
-		// Apuntador a los datos, si no los hemos mandado
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-
-		// Cuando haceos un bind con 0, 
-		// en realidad significa unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		// Unbind del vao
-		glBindVertexArray(0);
+		updateVBO(vaos[i], positionsVBOs[i], 0, points[i], 2, GL_FLOAT, GL_DYNAMIC_DRAW);
 	}
 }
 

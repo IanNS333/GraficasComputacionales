@@ -6,5 +6,6 @@
 namespace cgmath {
 
 bool AreEqual(float a, float b);
+float radians(float degrees);
 
 }

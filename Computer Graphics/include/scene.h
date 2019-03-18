@@ -27,5 +27,74 @@ public:
 	virtual void specialKeys(int key) = 0;
 	virtual void passiveMotion(int x, int y) = 0;
 
-	GLuint generateShaderProgram(std::vector<shader_file> shaders);
+	GLuint generateShaderProgram(std::vector<shader_file> shaders, std::vector<std::string> variables = {});
+
+	template <class T>
+	GLuint generateVBO(
+		const GLuint &vao,
+		const GLuint &attribId,
+		const std::vector<T> &data,
+		const GLuint &dataTypeCount,
+		const GLenum &dataType,
+		const GLenum &drawType)
+	{
+		GLuint result;
+		glBindVertexArray(vao);
+
+		glGenBuffers(1, &result);
+		glBindBuffer(GL_ARRAY_BUFFER, result);
+		glBufferData(GL_ARRAY_BUFFER,
+					 sizeof(T) * data.size(),
+					 data.data(),
+					 drawType);
+		glEnableVertexAttribArray(attribId);
+		glVertexAttribPointer(attribId, dataTypeCount, dataType, GL_FALSE, 0, nullptr);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+		return result;
+	}
+
+	template <class T>
+	void updateVBO(
+		const GLuint &vao,
+		const GLuint &vbo,
+		const GLuint &attribId,
+		const std::vector<T> &data,
+		const GLuint &dataTypeCount,
+		const GLenum &dataType,
+		const GLenum &drawType)
+	{
+		glBindVertexArray(vao);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBufferData(GL_ARRAY_BUFFER,
+					 sizeof(T) * data.size(),
+					 data.data(),
+					 drawType);
+		glEnableVertexAttribArray(attribId);
+		glVertexAttribPointer(attribId, dataTypeCount, dataType, GL_FALSE, 0, nullptr);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+
+	GLuint generateIBO(
+		const GLuint &vao,
+		const std::vector<unsigned int> &indexes,
+		const GLenum &drawType)
+	{
+		GLuint result;
+		glBindVertexArray(vao);
+
+		glGenBuffers(1, &result);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, result);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+					 sizeof(unsigned int) * indexes.size(),
+					 indexes.data(),
+					 drawType);
+
+		glBindVertexArray(vao);
+		return result;
+	}
 };

@@ -15,6 +15,8 @@
 #include "scene_fragment.h"
 #include "scene_circle_grid.h"
 #include "scene_sphere.h"
+#include "scene_circle.h"
+#include "scene_cube.h"
 
 std::vector<std::unique_ptr<scene>> scene_manager::sceneList;
 int scene_manager::currentScene = -1;
@@ -95,7 +97,11 @@ void scene_manager::initialize()
 	std::unique_ptr<scene> scene6(new scene_fragment);
 	std::unique_ptr<scene> scene7(new scene_circle_grid);
 	std::unique_ptr<scene> scene8(new scene_sphere);
+	std::unique_ptr<scene> scene9(new scene_circle);
+	std::unique_ptr<scene> scene10(new scene_cube);
 
+	sceneList.push_back(std::move(scene10));
+	sceneList.push_back(std::move(scene9));
 	sceneList.push_back(std::move(scene8));
 	sceneList.push_back(std::move(scene7));
 	sceneList.push_back(std::move(scene6));

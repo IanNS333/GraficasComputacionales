@@ -12,7 +12,16 @@ void scene_fragment::compile_shaders() {
 	shader_program = generateShaderProgram({
 		{"shaders/simple.vert", GL_VERTEX_SHADER},
 		{"shaders/palmera.frag", GL_FRAGMENT_SHADER },
-			});
+	},{
+		"position"
+	});
+
+	time_location = glGetUniformLocation(shader_program, "u_time");
+	resolution_location = glGetUniformLocation(shader_program, "u_resolution");
+
+	glUseProgram(shader_program);
+	glUniform2f(resolution_location, 400, 400);
+	glUseProgram(0);
 }
 
 void scene_fragment::init()
@@ -29,24 +38,8 @@ void scene_fragment::init()
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	glGenBuffers(1, &positionsVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, positionsVBO);
-	glBufferData(GL_ARRAY_BUFFER,
-		sizeof(cgmath::vec2) * positions.size(),
-		positions.data(),
-		GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glGenBuffers(1, &indicesBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer);
-
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-		sizeof(unsigned int) * indices.size(),
-		indices.data(),
-		GL_STATIC_DRAW
-	);
+	positionsVBO = generateVBO(vao, 0, positions, 2, GL_FLOAT, GL_STATIC_DRAW);
+	indicesBuffer= generateIBO(vao, indices, GL_STATIC_DRAW);
 
 	glBindVertexArray(0);
 
@@ -76,11 +69,7 @@ void scene_fragment::mainLoop()
 
 	glUseProgram(shader_program);
 
-	GLuint time_location = glGetUniformLocation(shader_program, "u_time");
-	GLuint resolution_location = glGetUniformLocation(shader_program, "u_resolution");
-
 	glUniform1f(time_location, time::elapsed_time().count());
-	glUniform2f(resolution_location, width, height);
 
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -90,6 +79,13 @@ void scene_fragment::mainLoop()
 
 void scene_fragment::resize(int width, int height)
 {
+	glViewport(0, 0, width, height);
+
+	glUseProgram(shader_program);
+
+	glUniform2f(resolution_location, (float)width, (float)height);
+
+	glUseProgram(0);
 	//this->width = width;
 	//this->height = height;
 }
