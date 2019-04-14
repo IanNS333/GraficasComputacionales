@@ -12,8 +12,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{12D34D53-4BBE-4B24-8AF4-B02984172C67}</ProjectGuid>
-    <RootNamespace>ComputerGraphics</RootNamespace>
+    <ProjectGuid>{A6D7791B-DC4F-4427-A63F-01F075F75CCA}</ProjectGuid>
+    <RootNamespace>Minecraft</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -80,19 +80,8 @@
   <ItemGroup>
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\scene.cpp" />
-    <ClCompile Include="src\scene_chaikin.cpp" />
-    <ClCompile Include="src\scene_circle.cpp" />
-    <ClCompile Include="src\scene_circle_grid.cpp" />
-    <ClCompile Include="src\scene_compatibility.cpp" />
-    <ClCompile Include="src\scene_conchoid.cpp" />
-    <ClCompile Include="src\scene_cube.cpp" />
-    <ClCompile Include="src\scene_fragment.cpp" />
     <ClCompile Include="src\scene_manager.cpp" />
-    <ClCompile Include="src\scene_primitives.cpp" />
     <ClCompile Include="src\scene_shading.cpp" />
-    <ClCompile Include="src\scene_sphere.cpp" />
-    <ClCompile Include="src\scene_texture.cpp" />
-    <ClCompile Include="src\scene_vertex.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Math\Math.vcxproj">
@@ -103,20 +92,10 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\perlin_noise.h" />
     <ClInclude Include="include\scene.h" />
-    <ClInclude Include="include\scene_chaikin.h" />
-    <ClInclude Include="include\scene_circle.h" />
-    <ClInclude Include="include\scene_circle_grid.h" />
-    <ClInclude Include="include\scene_compatibility.h" />
-    <ClInclude Include="include\scene_conchoid.h" />
-    <ClInclude Include="include\scene_cube.h" />
-    <ClInclude Include="include\scene_fragment.h" />
     <ClInclude Include="include\scene_manager.h" />
-    <ClInclude Include="include\scene_primitives.h" />
     <ClInclude Include="include\scene_shading.h" />
-    <ClInclude Include="include\scene_sphere.h" />
-    <ClInclude Include="include\scene_texture.h" />
-    <ClInclude Include="include\scene_vertex.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\circle.frag" />
@@ -126,6 +105,7 @@
     <None Include="shaders\cube_texture.frag" />
     <None Include="shaders\cube_texture.vert" />
     <None Include="shaders\grid.vert" />
+    <None Include="shaders\lambertian.frag" />
     <None Include="shaders\palmera.frag" />
     <None Include="shaders\cube_shading.frag" />
     <None Include="shaders\simple.vert" />

@@ -3,6 +3,7 @@
 
 #include "cgmath.h"
 #include "vec3.h"
+#include "vec4.h"
 
 using std::ostream;
 
@@ -11,6 +12,8 @@ namespace cgmath {
 vec3::vec3() : x(0.0f), y(0.0f), z(0.0f) {}
 
 vec3::vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+
+vec3::vec3(const vec4 &vec) : x(vec.x), y(vec.y), z(vec.z) {}
 
 float& vec3::operator[](int i) {
 	return (&x)[i];

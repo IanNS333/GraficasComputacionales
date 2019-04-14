@@ -81,7 +81,7 @@
     <ClInclude Include="include\time_utils.h" />
     <ClInclude Include="include\stb_image_write.h" />
     <ClInclude Include="include\utils.h" />
-    <ClInclude Include="include\vec3.h" />
+    <ClInclude Include="include\u_vec3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

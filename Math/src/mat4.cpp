@@ -38,6 +38,14 @@ bool mat4::operator==(const mat4& m) const {
 		this->operator[](2) == m[2];
 }
 
+mat3 mat4::to_mat3() const {
+	return mat3(
+		vec3(this->operator[](0)),
+		vec3(this->operator[](1)),
+		vec3(this->operator[](2))
+	);
+}
+
 float mat4::determinant(const mat4& m) {
 	float result = 0;
 

@@ -7,18 +7,7 @@
 #include <IL/il.h>
 
 #include "scene.h"
-#include "scene_compatibility.h"
-#include "scene_primitives.h"
-#include "scene_chaikin.h"
-#include "scene_conchoid.h"
 #include "time_utils.h"
-#include "scene_vertex.h"
-#include "scene_fragment.h"
-#include "scene_circle_grid.h"
-#include "scene_sphere.h"
-#include "scene_circle.h"
-#include "scene_cube.h"
-#include "scene_texture.h"
 #include "scene_shading.h"
 
 std::vector<std::unique_ptr<scene>> scene_manager::sceneList;
@@ -42,7 +31,8 @@ void scene_manager::start(int argc, char* argv[], const std::string& name, int w
 	glutCloseFunc(cleanup);
 	glutKeyboardFunc(normalKeysDown);
 	glutKeyboardUpFunc(normalKeysUp);
-	glutSpecialFunc(specialKeys);
+	glutSpecialFunc(specialKeysDown);
+	glutSpecialUpFunc(specialKeysUp);
 	glutPassiveMotionFunc(passiveMotion);
 
 	// Glew init
@@ -96,30 +86,8 @@ void scene_manager::initialize()
 	//std::unique_ptr<scene> somescene(new scene_project);
 	//sceneList.push_back(std::move(somescene));
 	
-	std::unique_ptr<scene> scene1(new scene_compatibility);
-	std::unique_ptr<scene> scene2(new scene_primitives);
-	std::unique_ptr<scene> scene3(new scene_chaikin);
-	std::unique_ptr<scene> scene4(new scene_conchoid);
-	std::unique_ptr<scene> scene5(new scene_vertex);
-	std::unique_ptr<scene> scene6(new scene_fragment);
-	std::unique_ptr<scene> scene7(new scene_circle_grid);
-	std::unique_ptr<scene> scene8(new scene_sphere);
-	std::unique_ptr<scene> scene9(new scene_circle);
-	std::unique_ptr<scene> scene10(new scene_cube);
-	std::unique_ptr<scene> scene11(new scene_texture);
-	std::unique_ptr<scene> scene12(new scene_shading);
+	std::unique_ptr<scene> scene1(new scene_shading);
 
-	sceneList.push_back(std::move(scene12));
-	sceneList.push_back(std::move(scene11));
-	sceneList.push_back(std::move(scene10));
-	sceneList.push_back(std::move(scene9));
-	sceneList.push_back(std::move(scene8));
-	sceneList.push_back(std::move(scene7));
-	sceneList.push_back(std::move(scene6));
-	sceneList.push_back(std::move(scene5));
-	sceneList.push_back(std::move(scene4));
-	sceneList.push_back(std::move(scene3));
-	sceneList.push_back(std::move(scene2));
 	sceneList.push_back(std::move(scene1));
 
 	for (auto& s : sceneList)
@@ -135,7 +103,8 @@ void scene_manager::initialize()
 void scene_manager::mainLoop()
 {
 	time::tick();
-
+	std::cout << '\r';
+	std::cout << (1.0/time::delta_time().count());
 	if (currentScene >= 0)
 		sceneList.at(currentScene)->mainLoop();
 
@@ -181,10 +150,16 @@ void scene_manager::normalKeysUp(unsigned char key, int x, int y)
 		sceneList.at(currentScene)->normalKeysUp(key);
 }
 
-void scene_manager::specialKeys(int key, int x, int y)
+void scene_manager::specialKeysUp(int key, int x, int y) {
+
+	if (currentScene >= 0)
+		sceneList.at(currentScene)->specialKeysUp(key);
+}
+
+void scene_manager::specialKeysDown(int key, int x, int y)
 {
 	if (currentScene >= 0)
-		sceneList.at(currentScene)->specialKeys(key);
+		sceneList.at(currentScene)->specialKeysDown(key);
 }
 
 void scene_manager::passiveMotion(int x, int y)

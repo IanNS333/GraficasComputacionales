@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "vec4.h"
+#include "mat3.h"
 
 using std::ostream;
 
@@ -22,6 +23,7 @@ public:
 	vec4& operator[](int column);
 	const vec4& operator[](int column) const;
 	bool operator==(const mat4& m) const;
+	mat3 to_mat3() const;
 
 	static float determinant(const mat4& m);
 	static mat4 inverse(const mat4& m);

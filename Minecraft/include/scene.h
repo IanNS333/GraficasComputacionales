@@ -25,7 +25,8 @@ public:
 	virtual void resize(int width, int height) = 0;
 	virtual void normalKeysDown(unsigned char key) = 0;
 	virtual void normalKeysUp(unsigned char key) = 0;
-	virtual void specialKeys(int key) = 0;
+	virtual void specialKeysDown(int key) = 0;
+	virtual void specialKeysUp(int key) = 0;
 	virtual void passiveMotion(int x, int y) = 0;
 
 	GLuint generateShaderProgram(std::vector<shader_file> shaders, std::vector<std::string> variables = {});
@@ -58,6 +59,34 @@ public:
 	}
 
 	template <class T>
+	GLuint generateInstancedVBO(
+		const GLuint &vao,
+		const GLuint &attribId,
+		const std::vector<T> &data,
+		const GLuint &dataTypeCount,
+		const GLenum &dataType,
+		const GLenum &drawType,
+		const GLuint &instances_pass_per_value)
+	{
+		GLuint result;
+		glBindVertexArray(vao);
+
+		glGenBuffers(1, &result);
+		glBindBuffer(GL_ARRAY_BUFFER, result);
+		glBufferData(GL_ARRAY_BUFFER,
+			sizeof(T) * data.size(),
+			data.data(),
+			drawType);
+		glEnableVertexAttribArray(attribId);
+		glVertexAttribPointer(attribId, dataTypeCount, dataType, GL_FALSE, 0, nullptr);
+		glVertexAttribDivisor(attribId, instances_pass_per_value);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+		return result;
+	}
+
+	template <class T>
 	void updateVBO(
 		const GLuint &vao,
 		const GLuint &vbo,
@@ -77,8 +106,34 @@ public:
 		glEnableVertexAttribArray(attribId);
 		glVertexAttribPointer(attribId, dataTypeCount, dataType, GL_FALSE, 0, nullptr);
 
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glBindVertexArray(0);
+	}
+
+	template <class T>
+	void updateInstancedVBO(
+		const GLuint &vao,
+		const GLuint &vbo,
+		const GLuint &attribId,
+		const std::vector<T> &data,
+		const GLuint &dataTypeCount,
+		const GLenum &dataType,
+		const GLenum &drawType,
+		const GLuint &instances_pass_per_value)
+	{
+		glBindVertexArray(vao);
+	
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBufferData(GL_ARRAY_BUFFER,
+			sizeof(T) * data.size(),
+			data.data(),
+			drawType);
+		glEnableVertexAttribArray(attribId);
+		glVertexAttribPointer(attribId, dataTypeCount, dataType, GL_FALSE, 0, nullptr);
+		glVertexAttribDivisor(attribId, instances_pass_per_value);
+
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glBindVertexArray(0);
 	}
 
 	GLuint generateIBO(
