@@ -37,18 +37,18 @@ class scene_shading : public scene
 public:
 
 	~scene_shading();
-
+	scene_shading(GLFWwindow *window): scene(window){
+        
+	}
 	void init();
 	void awake();
 	void sleep();
 	void reset() {}
 	void mainLoop();
 	void resize(int width, int height);
-	void normalKeysDown(unsigned char key);
-	void normalKeysUp(unsigned char key);
-	void specialKeysUp(int key);
-	void specialKeysDown(int key);
-	void passiveMotion(int x, int y);
+	void keysDown(int key);
+	void keysUp(int key);
+	void passiveMotion(float x, float y);
 
 private:
 
@@ -121,9 +121,13 @@ private:
 	int vertical_input = 0;
 	int horizontal_input = 0;
 	int up_input = 0;
-	int yaw_input = 0;
-	int pitch_input = 0;
+	float yaw_input = 0;
+	float pitch_input = 0;
 	
+	bool capture_mouse = true;
+    float mouse_x, delta_x;
+    float mouse_y, delta_y;
+
 	vec3 right = { 1.0f, 0.0f, 0.0f };
 	vec3 upward = { 0.0f, 1.0f, 0.0f };
 	vec3 forward = vec3::normalize({ 0.0f, -1.0f, -1.0f });

@@ -8,25 +8,31 @@
 
 class scene_manager
 {
-public:
-	static void start(int argc, char* argv[], const std::string& name, int width, int height);
+  public:
+    static void start(int argc,
+                      char* argv[],
+                      const std::string& name,
+                      int width,
+                      int height);
 
-	static void next();
-	static void prev();
+    static void next();
+    static void prev();
 
-private:
-	static void initialize();
-	static void mainLoop();
-	static void idle();
-	static void cleanup();
-	static void resize(int width, int height);
+  private:
+    static void initialize(GLFWwindow* window);
+    static void mainLoop(GLFWwindow* window);
+    static void resize(GLFWwindow* window, int width, int height);
+    static void error(int error, const char* description);
 
-	static void normalKeysDown(unsigned char key, int x, int y);
-	static void normalKeysUp(unsigned char key, int x, int y);
-	static void specialKeysUp(int key, int x, int y);
-	static void specialKeysDown(int key, int x, int y);
-	static void passiveMotion(int x, int y);
+    static void keys(GLFWwindow* window,
+                     int key,
+                     int scancode,
+                     int action,
+                     int mods);
+    static void keysDown(int key);
+    static void keysUp(int key);
+    static void passiveMotion(GLFWwindow* window, double x, double y);
 
-	static std::vector<std::unique_ptr<scene>> sceneList;
-	static int currentScene;
+    static std::vector<std::unique_ptr<scene>> sceneList;
+    static int currentScene;
 };

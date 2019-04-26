@@ -22,7 +22,7 @@ namespace perlin {
 		for (int j = 0; j <= height; j++) {
 			gradients.push_back(vector<vec2>());
 			for (int i = 0; i <= width; i++) {
-				gradients[j].push_back(vec2::normalize({ randf(), randf() }));
+				gradients[j].push_back(vec2::normalize({ (randf() * 2) - 1, (randf() * 2) - 1}));
 			}
 		}
 	}

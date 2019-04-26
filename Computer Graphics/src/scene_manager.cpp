@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include <GL/glew.h>
+#include <glad/glad.h>
 #include <GL/freeglut.h>
 #include <IL/il.h>
 
