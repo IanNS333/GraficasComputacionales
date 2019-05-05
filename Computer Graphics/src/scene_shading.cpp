@@ -117,8 +117,9 @@ void scene_shading::init()
 		back_upper_left, back_upper_right, back_lower_right, back_lower_left,
 	};
 
-	float x = current_texture%16;
-	float y = current_texture/23;
+	float x = float(current_texture%16);
+	float y = float(current_texture/23);
+
 	vec2 lower_left = { x/16.0f, (y / 23.0f) };
 	vec2 lower_right = { (x + 1.0f)/ 16.0f, (y/ 23.0f) };
 	vec2 upper_left = { x/16.0f, (y + 1.0f) / 23.0f };

@@ -1,23 +1,23 @@
 #pragma once
 
-#include "vec3.h"
+#include "u_vec3.h"
 
-using utils::vec3;
+using utils::u_vec3;
 
 class ray
 {
 	public:
 		ray() {}
-		ray(const vec3& a, const vec3& b) {
+		ray(const u_vec3& a, const u_vec3& b) {
 			A = a;
 			B = b;
 		}
-		vec3 origin() const { return A; }
-		vec3 direction() const { return B; }
-		vec3 point_at(float t) const {
+		u_vec3 origin() const { return A; }
+		u_vec3 direction() const { return B; }
+		u_vec3 point_at(float t) const {
 			return A + t * B;
 		}
 
-		vec3 A;
-		vec3 B;
+		u_vec3 A;
+		u_vec3 B;
 };

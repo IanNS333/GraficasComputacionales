@@ -4,6 +4,7 @@
 #include "mat4.h"
 #include "mat3.h"
 #include "cgmath.h"
+#include "vec3.h"
 
 using std::ostream;
 using std::vector;

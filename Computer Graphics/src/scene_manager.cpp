@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include <glad/glad.h>
+#include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <IL/il.h>
 
@@ -135,7 +135,8 @@ void scene_manager::initialize()
 void scene_manager::mainLoop()
 {
 	time::tick();
-
+	std::cout << '\r';
+	std::cout << (1.0f / time::delta_time().count());
 	if (currentScene >= 0)
 		sceneList.at(currentScene)->mainLoop();
 

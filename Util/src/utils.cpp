@@ -39,7 +39,7 @@ u_vec3 reflect(const u_vec3& v, const u_vec3& normal) {
 bool refract(const u_vec3& v, const u_vec3& normal, float ni_over_nt, u_vec3& refracted) {
 	u_vec3 uv = unit_vector(v);
 	float dt = dot(uv, normal);
-	float discriminant = 1.0 - ni_over_nt * ni_over_nt*(1 - dt * dt);
+	float discriminant = 1.0f - ni_over_nt * ni_over_nt*(1 - dt * dt);
 	if (discriminant > 0) {
 		refracted = ni_over_nt * (uv - normal * dt) - normal * sqrt(discriminant);
 		return true;

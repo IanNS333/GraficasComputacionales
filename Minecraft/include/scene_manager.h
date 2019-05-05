@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <thread>
 
 #include "scene.h"
 
@@ -18,6 +19,8 @@ class scene_manager
     static void next();
     static void prev();
 
+    static std::vector<std::unique_ptr<scene>> sceneList;
+
   private:
     static void initialize(GLFWwindow* window);
     static void mainLoop(GLFWwindow* window);
@@ -32,7 +35,9 @@ class scene_manager
     static void keysDown(int key);
     static void keysUp(int key);
     static void passiveMotion(GLFWwindow* window, double x, double y);
+    static void mouseButton(GLFWwindow* window, int button, int action, int modifiers);
 
-    static std::vector<std::unique_ptr<scene>> sceneList;
     static int currentScene;
+	static std::atomic<bool> program_is_running;
+	static std::vector<std::thread> threads;
 };

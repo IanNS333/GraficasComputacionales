@@ -1,7 +1,11 @@
 #include "scene_shading.h"
 
 #include <GL/freeglut.h>
+#include <algorithm>
 #include <iostream>
+#include <forward_list>
+#include <atomic>
+#include <cmath>
 
 #include "cgmath.h"
 #include "mat3.h"
@@ -11,6 +15,7 @@
 #include "vec2.h"
 #include "vec3.h"
 #include "vec4.h"
+#include "utils.h"
 
 using cgmath::lookAt;
 using cgmath::mat3;
@@ -22,88 +27,91 @@ using cgmath::translation_matrix;
 using cgmath::vec2;
 using cgmath::vec3;
 using cgmath::vec4;
+using cgmath::AreEqual;
+using utils::randf;
+using std::max;
+using std::min;
+using std::atomic;
+using std::truncf;
+
+float sign(float val) {
+	return val < 0 ? -1 : val > 0 ? 1 : 0 ;
+}
+
+vec3 sign(const vec3& v) {
+	return vec3(sign(v.x), sign(v.y), sign(v.z));
+}
+
+float abs_ceil(float x)
+{
+	return x < 0 ? floor(x) : ceil(x);
+}
 
 scene_shading::~scene_shading() {
     glDeleteProgram(shader_program);
+    glDeleteProgram(light_shader_program);
     glDeleteTextures(1, &textureId);
 }
 
 void scene_shading::compile_shaders() {
     shader_program = generateShaderProgram(
         {
-            {"shaders/cube_shading.vert", GL_VERTEX_SHADER},
-            {"shaders/lambertian.frag", GL_FRAGMENT_SHADER},
-            //{"shaders/cube_shading.frag", GL_FRAGMENT_SHADER },
+            {"shaders/shadow.vert", GL_VERTEX_SHADER},
+            {"shaders/shadow.frag", GL_FRAGMENT_SHADER}
         },
-        {"position_in", "texture_coord_in", "normal_in", "offset_in"});
+        {
+			"position_in", 
+			"offset_in", 
+			"normal_in", 
+			"texture_coord_up_in",
+			"texture_coord_side_in", 
+			"texture_coord_down_in", 
+			"face_in", 
+			"texture_offset_in"
+		});
 
     glUseProgram(shader_program);
 
     time_location = glGetUniformLocation(shader_program, "u_time");
-    model_matrix_location =
-        glGetUniformLocation(shader_program, "u_model_matrix");
-    proyection_matrix_location =
-        glGetUniformLocation(shader_program, "u_proyection_matrix");
-    view_matrix_location =
-        glGetUniformLocation(shader_program, "u_view_matrix");
-    normal_matrix_location =
-        glGetUniformLocation(shader_program, "u_normal_matrix");
+    mvp_matrix_location = glGetUniformLocation(shader_program, "u_mvp_matrix");
+    normal_matrix_location = glGetUniformLocation(shader_program, "u_normal_matrix");
 
     texture_location = glGetUniformLocation(shader_program, "u_texture1");
+	light_texture_location = glGetUniformLocation(shader_program, "u_light_texture");
 
-    light_position_location =
-        glGetUniformLocation(shader_program, "u_light_position");
-    light_color_location =
-        glGetUniformLocation(shader_program, "u_light_color");
-    camera_position_location =
-        glGetUniformLocation(shader_program, "u_camera_position");
+    light_position_location = glGetUniformLocation(shader_program, "u_light_position");
+    light_color_location = glGetUniformLocation(shader_program, "u_light_color");
+    camera_position_location = glGetUniformLocation(shader_program, "u_camera_position");
+
+	shadow_light_mvp_location = glGetUniformLocation(shader_program, "u_light_mvp_matrix");
+
+	GLuint poisson_location = glGetUniformLocation(shader_program, "u_poisson_disk");
+	glUniform2fv(poisson_location, 64, &(poisson_disk[0][0]));
 
     glUniform3f(light_color_location, 1.0f, 1.0f, 1.0f);
-    glUniform3f(light_position_location, 0, 10.0f, 0.0f);
 
     glUseProgram(0);
 }
 
-// mat4 scene_shading::get_camera_model_matrix(float time) {
-//
-//	//mat4 camera_model = lookAt(camera_position, { 0.0f, 0.0f, 0.0f }, {
-//0.0f, 1.0f, 0.0f });
-//
-//	mat4 translation = mat4::transpose({
-//		{ 1.0f, 0.0f, 0.0f, camera_position.x },
-//		{ 0.0f, 1.0f, 0.0f, camera_position.y },
-//		{ 0.0f, 0.0f, 1.0f, camera_position.z },
-//		{ 0.0f, 0.0f, 0.0f, 1.0f }
-//		});
-//
-//	mat4 camera_model = /*rotation_matrix(0.0f, 10*radians(time), 0.0f) * */
-//translation * rotation_matrix(radians(-45.0f), 0.0f, 0.0f);
-//
-//	return camera_model;
-//}
+void scene_shading::compile_light_shaders() {
+	light_shader_program = generateShaderProgram({
+		{"shaders/depth.vert", GL_VERTEX_SHADER},
+		{"shaders/depth.frag", GL_FRAGMENT_SHADER},
+	}, 
+	{"position_in", "offset_in"});
 
-mat4 scene_shading::calculate_model_matrix(float time) {
-    float deltaX = 30.0f;
-    float deltaY = 60.0f;
-    float deltaZ = 30.0f;
-
-    float alpha = radians(time * deltaX);
-    float beta = radians(time * deltaY);
-    float gamma = radians(time * deltaZ);
-
-    mat4 scale = {
-        {0.5f, 0.0f, 0.0f, 0.0f},
-        {0.0f, 0.5f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 0.5f, 0.0f},
-        {0.0f, 0.0f, 0.0f, 1.0f},
-    };
-
-    return rotation_matrix(0, 0, 0) * scale;
-    // return rotation_matrix(alpha, beta, gamma) * scale;
+	light_mvp_location = glGetUniformLocation(light_shader_program, "u_light_mvp_matrix");
 }
 
-vector<vec2> scene_shading::get_texture_coords(int x, int y) {
-    x--;
+vec2 scene_shading::get_texture_coords(int x, int y) {
+	x--;
+	y--;
+	return vec2(x / 16.0f, y / 23.0f );
+}
+
+//vector<vec2> scene_shading::get_texture_coords(int x, int y) {
+    
+	/*x--;
     y--;
     vec2 lower_left = {x / 16.0f, (y / 23.0f)};
     vec2 lower_right = {(x + 1.0f) / 16.0f, (y / 23.0f)};
@@ -116,18 +124,18 @@ vector<vec2> scene_shading::get_texture_coords(int x, int y) {
         upper_right,
         upper_left,
     };
-    return texture_coords;
-}
+    return texture_coords;*/
+//}
 
 vector<vec3> scene_shading::cube_positions() {
-    vec3 back_lower_left = {-1.0f, -1.0f, -1.0f};
-    vec3 back_lower_right = {1.0f, -1.0f, -1.0f};
-    vec3 back_upper_right = {1.0f, 1.0f, -1.0f};
-    vec3 back_upper_left = {-1.0f, 1.0f, -1.0f};
-    vec3 front_lower_left = {-1.0f, -1.0f, 1.0f};
-    vec3 front_lower_right = {1.0f, -1.0f, 1.0f};
-    vec3 front_upper_right = {1.0f, 1.0f, 1.0f};
-    vec3 front_upper_left = {-1.0f, 1.0f, 1.0f};
+    vec3 back_lower_left = {-0.5f, -0.5f, -0.5f};
+    vec3 back_lower_right = {0.5f, -0.5f, -0.5f};
+    vec3 back_upper_right = {0.5f, 0.5f, -0.5f};
+    vec3 back_upper_left = {-0.5f, 0.5f, -0.5f};
+    vec3 front_lower_left = {-0.5f, -0.5f, 0.5f};
+    vec3 front_lower_right = {0.5f, -0.5f, 0.5f};
+    vec3 front_upper_right = {0.5f, 0.5f, 0.5f};
+    vec3 front_upper_left = {-0.5f, 0.5f, 0.5f};
 
     vector<vec3> positions = {
         // front
@@ -164,47 +172,47 @@ vector<vec3> scene_shading::cube_positions() {
     return positions;
 }
 
-vector<vec2> scene_shading::cube_texture_coords(int id) {
-    vector<vec2> texture_coords_up =
-        get_texture_coords(textures[id].x_up, textures[id].y_up);
-    vector<vec2> texture_coords_side =
-        get_texture_coords(textures[id].x_side, textures[id].y_side);
-    vector<vec2> texture_coords_down =
-        get_texture_coords(textures[id].x_down, textures[id].y_down);
-    vector<vec2> texture_coords = {
-        // front
-        texture_coords_side[0],
-        texture_coords_side[1],
-        texture_coords_side[2],
-        texture_coords_side[3],
-        // left
-        texture_coords_side[0],
-        texture_coords_side[1],
-        texture_coords_side[2],
-        texture_coords_side[3],
-        // right
-        texture_coords_side[0],
-        texture_coords_side[1],
-        texture_coords_side[2],
-        texture_coords_side[3],
-        // up
-        texture_coords_up[0],
-        texture_coords_up[1],
-        texture_coords_up[2],
-        texture_coords_up[3],
-        // down
-        texture_coords_down[0],
-        texture_coords_down[1],
-        texture_coords_down[2],
-        texture_coords_down[3],
-        // back
-        texture_coords_side[0],
-        texture_coords_side[1],
-        texture_coords_side[2],
-        texture_coords_side[3],
-    };
-    return texture_coords;
-}
+//vector<vec2> scene_shading::cube_texture_coords(int id) {
+//    vector<vec2> texture_coords_up =
+//        get_texture_coords(textures[id].x_up, textures[id].y_up);
+//    vector<vec2> texture_coords_side =
+//        get_texture_coords(textures[id].x_side, textures[id].y_side);
+//    vector<vec2> texture_coords_down =
+//        get_texture_coords(textures[id].x_down, textures[id].y_down);
+//    vector<vec2> texture_coords = {
+//        // front
+//        texture_coords_side[0],
+//        texture_coords_side[1],
+//        texture_coords_side[2],
+//        texture_coords_side[3],
+//        // left
+//        texture_coords_side[0],
+//        texture_coords_side[1],
+//        texture_coords_side[2],
+//        texture_coords_side[3],
+//        // right
+//        texture_coords_side[0],
+//        texture_coords_side[1],
+//        texture_coords_side[2],
+//        texture_coords_side[3],
+//        // up
+//        texture_coords_up[0],
+//        texture_coords_up[1],
+//        texture_coords_up[2],
+//        texture_coords_up[3],
+//        // down
+//        texture_coords_down[0],
+//        texture_coords_down[1],
+//        texture_coords_down[2],
+//        texture_coords_down[3],
+//        // back
+//        texture_coords_side[0],
+//        texture_coords_side[1],
+//        texture_coords_side[2],
+//        texture_coords_side[3],
+//    };
+//    return texture_coords;
+//}
 
 vector<vec3> scene_shading::cube_normal_vectors() {
     vec3 front = {0.0f, 0.0f, 1.0f};
@@ -223,150 +231,306 @@ vector<vec3> scene_shading::cube_normal_vectors() {
 }
 
 bool scene_shading::is_block_visible(int i, int j, int k) {
-    int a_start = i == 0 ? 0 : -1;
-    int a_end = i == 1000 ? 0 : 1;
+    
+	if (k == 0) {
+		return true;
+	}
+	
+	int a_start = i == 0 ? 0 : -1;
+    int a_end = i == MAP_SIZE ? 0 : 1;
 
     int b_start = j == 0 ? 0 : -1;
-    int b_end = j == 1000 ? 0 : 1;
+    int b_end = j == MAP_SIZE ? 0 : 1;
 
     int c_start = k == 0 ? 0 : -1;
-    int c_end = k == 64 ? 0 : 1;
+    int c_end = k == MAP_HEIGHT ? 0 : 1;
+
+	short currentBlock = blocks[i][j][k];
+	short block = 0;
 
     for (int a = a_start; a <= a_end; a++) {
         for (int b = b_start; b <= b_end; b++) {
             for (int c = c_start; c <= c_end; c++) {
-                if (blocks[i + a][j + b][k + c] == 0) {
+				block = blocks[i + a][j + b][k + c];
+                if (block == 0) {
                     return true;
                 }
+				if (currentBlock != WATER_TYPE && block == WATER_TYPE) {
+					return true;
+				}
             }
         }
     }
     return false;
 }
 
-vector<vector<vec3>> scene_shading::generate_map() {
-    for (int i = 0; i <= 1000; i++) {
-        for (int j = 0; j <= 1000; j++) {
-            for (int k = 0; k <= 64; k++) {
+void scene_shading::generate_tree(int i, int j, int k, int biome) {
+	int leaves = 0;
+	int wood = 0;
+	if (biome == SNOW_BIOME) {
+		leaves = SNOW_LEAVES_TYPE;
+		wood = DARK_WOOD_TYPE;
+	}
+	else if (biome == FOREST_BIOME) {
+		leaves = LEAVES_TYPE;
+		wood = WOOD_TYPE;
+	}
+	else if (biome == PLAINS_BIOME) {
+		if (randf() > 0.01) {
+			return;
+		}
+		leaves = LEAVES_TYPE;
+		wood = WOOD_TYPE;
+	}
+	else if (biome == DESERT_BIOME) {
+		wood = CACTUS_TYPE;
+	}
+	else if (biome == AUTUM_FOREST) {
+		wood = DARK_WOOD_TYPE;
+		leaves = AUTUMN_LEAVES_TYPE;
+	}
+	else {
+		return;
+	}
+
+	int height = int(randf() * 3.0f + 4.0f);
+
+	for (int h = k; h < k+height; h++) {
+		blocks[i][j][h] = wood;
+	}
+	blocks[i][j][k + height] = leaves;
+
+	int width = height;
+	if (width % 2 == 0) {
+		width++;
+	}
+	
+	int limit = width / 2;
+	for (int a = -limit; a <= limit; a++) {
+		for (int b = -limit; b <= limit; b++) {
+			for (int h = -limit; h <= limit; h++) {
+				if (i + a > 1000 || i + a < 0 ||
+					j+b > 1000 || j + b < 0) {
+					continue;
+				}
+				if (randf() < 0.7f && blocks[i+a][j+b][k+h+height] == 0) {
+					blocks[i+a][j+b][k+h+height] = leaves;
+				}
+			}
+		}
+	}
+}
+
+int scene_shading::get_biome(float map_height, float biome_height) {
+	if (map_height > 0.7) return SNOW_BIOME;
+	if (map_height > 0.45) {
+		if (biome_height < 0.3) return PLAINS_BIOME;
+		if (biome_height < 0.5) return FOREST_BIOME;
+		if (biome_height < 0.7) return AUTUM_FOREST;
+		return DESERT_BIOME;
+	}
+	if(map_height > 0.44) return BEACH_BIOME;
+	return OCEAN_BIOME;
+}
+
+void scene_shading::generate_map() {
+
+	const int MAP_PERLIN_SIZE = 10;
+	const int BIOME_PERLIN_SIZE = 5;
+	const float MAP_PERLIN_RESOLUTION = (MAP_SIZE + 0.0f) / MAP_PERLIN_SIZE;
+	const float BIOME_PERLIN_RESOLUTION = (MAP_SIZE + 0.0f) / BIOME_PERLIN_SIZE;
+
+	perlin map_noise;
+	perlin biome_noise;
+
+    for (int i = 0; i <= MAP_SIZE; i++) {
+        for (int j = 0; j <= MAP_SIZE; j++) {
+            for (int k = 0; k <= MAP_HEIGHT; k++) {
                 blocks[i][j][k] = 0;
             }
         }
     }
-    perlin::generate_grid(101, 101);
+    
+	map_noise.generate_grid(MAP_PERLIN_SIZE + 1, MAP_PERLIN_SIZE + 1, time(nullptr));
+	biome_noise.generate_grid(BIOME_PERLIN_SIZE + 1, BIOME_PERLIN_SIZE + 1, time(nullptr));
 
-    for (int i = 0; i <= 1000; i++) {
-        for (int j = 0; j <= 1000; j++) {
-            int height = 16.0f * perlin::height_at(i / 10.0f, j / 10.0f);
+    for (int i = 0; i <= MAP_SIZE; i++) {
+        for (int j = 0; j <= MAP_SIZE; j++) {
+			float map_range = (0.5f*map_noise.height_at(i / MAP_PERLIN_RESOLUTION, j / MAP_PERLIN_RESOLUTION)) + 0.5f;
+			float biome_range = (0.5f*biome_noise.height_at(i / BIOME_PERLIN_RESOLUTION, j / BIOME_PERLIN_RESOLUTION)) + 0.5f;
 
-            for (int k = height; k >= -16; k--) {
-                if (blocks[i][j][k + 16 + 1] == 0) {
-                    blocks[i][j][k + 16] = 1;
-                } else if (blocks[i][j][k + 16 + 3] == 0) {
-                    blocks[i][j][k + 16] = 2;
+			int height = int(MAP_HEIGHT * map_range);
+
+			int biome = get_biome(map_range, biome_range);
+
+			int grass;
+			int dirt;
+
+			if (biome == SNOW_BIOME) {
+				grass = SNOW_TYPE;
+				dirt = DIRT_TYPE;
+			}
+			else if (biome == FOREST_BIOME) {
+				grass = GRASS_TYPE;
+				dirt = DIRT_TYPE;
+			}
+			else if (biome == PLAINS_BIOME) {
+				grass = GRASS_TYPE;
+				dirt = DIRT_TYPE;
+			}
+			else if (biome == DESERT_BIOME || biome == BEACH_BIOME || biome == OCEAN_BIOME) {
+				grass = SAND_TYPE;
+				dirt = SAND_TYPE;
+			}
+			else if (biome == AUTUM_FOREST) {
+				grass = DARK_GRASS_TYPE;
+				dirt = DIRT_TYPE;
+			}
+
+            for (int k = height; k >= 0; k--) {
+				 if (blocks[i][j][k + 1] == 0) {
+                    blocks[i][j][k] = grass;
+                } else if (blocks[i][j][k + 3] == 0) {
+                    blocks[i][j][k] = dirt;
                 } else {
-                    blocks[i][j][k + 16] = 3;
+                    blocks[i][j][k] = STONE_TYPE;
                 }
             }
+
+			for (int k = ceil(0.44f*MAP_HEIGHT); k > height; k--) {
+				if (blocks[i][j][k] == 0) {
+					blocks[i][j][k] = WATER_TYPE;
+				}
+			}
+			if (randf() < 0.01) {
+				generate_tree(i, j,height + 1, biome);
+			}
         }
     }
 
-    offsets.clear();
-    for (int i = 0; i < texture_count; i++) {
-        offsets.push_back(vector<vec3>());
-    }
+	offsets.clear();
+	offsets.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+	texture_up_coords.clear();
+	texture_up_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+	texture_side_coords.clear();
+	texture_side_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+	texture_down_coords.clear();
+	texture_down_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
 
-    for (int i = 0; i <= 1000; i++) {
-        for (int j = 0; j <= 1000; j++) {
-            for (int k = 0; k <= 64; k++) {
-                if (blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
-                    int type = blocks[i][j][k] - 1;
 
-                    offsets[type].push_back(vec3(i - 500, k - 16, j - 500));
-                    instance_count_per_block[type]++;
-                }
-                if (k > 30) {
-                    bool a = true;
-                }
-            }
-        }
-    }
+	int start_x = max(int(camera_position.x - RENDER_DISTANCE), 0);
+	int end_x = min(int(camera_position.x + RENDER_DISTANCE), MAP_SIZE);
+	int start_z = max(int(camera_position.z - RENDER_DISTANCE), 0);
+	int end_z = min(int(camera_position.z + RENDER_DISTANCE), MAP_SIZE);
 
-    return offsets;
+	for (int k = 0; k <= MAP_HEIGHT; k++) {
+		for (int i = start_x; i <= end_x; i++) {
+			for (int j = start_z; j <= end_z; j++) {
+
+				coords_to_offset_index[i][j][k] = 0;
+				bool in_range = (vec3(i, k, j) - camera_position).magnitude() < RENDER_DISTANCE;
+				if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
+					int type = blocks[i][j][k] - 1;
+
+					texture_up_coords.push_back(get_texture_coords(textures[type].x_up, textures[type].y_up));
+					texture_side_coords.push_back(get_texture_coords(textures[type].x_side, textures[type].y_side));
+					texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
+
+					//offsets.push_back(vec3(i - MAP_SIZE/2.0f, k, j - MAP_SIZE/2.0f));
+					coords_to_offset_index[i][j][k] = offsets.size();
+					offsets.push_back(vec3(i, k, j));
+				}
+			}
+		}
+	}
 }
 
 void scene_shading::init() {
-    vector<vec3> positions = cube_positions();
-    vector<vec2> texture_coords = cube_texture_coords(0);
-    vector<vec3> normal_vectors = cube_normal_vectors();
-    offsets = generate_map();
 
-    vector<unsigned int> indices{
+	init_poisson();
+
+    vector<vec3> positions = cube_positions();
+    vector<vec3> normal_vectors = cube_normal_vectors();
+	generate_map();
+	//update_map();
+
+	vector<float> faces = {
+		// front
+		1.0f,1.0f,1.0f,1.0f,
+		// left
+		1.0f,1.0f,1.0f,1.0f,
+		// right
+		1.0f,1.0f,1.0f,1.0f,
+		// up
+		0.0f,0.0f,0.0f,0.0f,
+		// down
+		2.0f,2.0f,2.0f,2.0f,
+		// back
+		1.0f,1.0f,1.0f,1.0f
+	};
+
+	vector<vec2> texture_offsets = {
+		// front
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+		// left
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+		// right
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+		// up
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+		// down
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+		// back
+		{0.0f, 0.0f}, {1.0f / 16.0f, 0.0f}, {1.0f / 16.0f, 1.0f / 23.0f}, {0.0f, 1.0f / 23.0f},
+	};
+
+    vector<unsigned int> indices = {
         // front
-        0,
-        1,
-        2,
-        0,
-        2,
-        3,
+		0,1,2,0,2,3,
         // left
-        4,
-        5,
-        6,
-        4,
-        6,
-        7,
+        4,5,6,4,6,7,
         // right
-        8,
-        9,
-        10,
-        8,
-        10,
-        11,
-        // up
-        12,
-        13,
-        14,
-        12,
-        14,
-        15,
-        // down
-        16,
-        17,
-        18,
-        16,
-        18,
-        19,
+        8,9,10,8,10,11,
+		// up
+        12,13,14,12,14,15,
+		// down
+        16,17,18,16,18,19,
         // back
-        20,
-        21,
-        22,
-        20,
-        22,
-        23,
+        20,21,22,20,22,23
     };
+
+    compile_shaders();
+	compile_light_shaders();
 
     glGenVertexArrays(1, &vao);
 
     indexIBO = generateIBO(vao, indices, GL_STATIC_DRAW);
     positionsVBO = generateVBO(vao, 0, positions, 3, GL_FLOAT, GL_STATIC_DRAW);
-    texture_coordsVBO =
-        generateVBO(vao, 1, texture_coords, 2, GL_FLOAT, GL_STATIC_DRAW);
-    normal_vectorsVBO =
-        generateVBO(vao, 2, normal_vectors, 3, GL_FLOAT, GL_STATIC_DRAW);
-    offsets_coordsVBO = generateInstancedVBO(vao, 3, offsets[0], 3, GL_FLOAT,
-                                             GL_STATIC_DRAW, 1);
+    offsets_coordsVBO = generateInstancedVBO(vao, 1, offsets, 3, GL_FLOAT, GL_STATIC_DRAW, 1);
 
-    compile_shaders();
+    normal_vectorsVBO = generateVBO(vao, 2, normal_vectors, 3, GL_FLOAT, GL_STATIC_DRAW);
+    
+	texture_coords_up_VBO = generateInstancedVBO(vao, 3, texture_up_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	texture_coords_side_VBO = generateInstancedVBO(vao, 4, texture_side_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	texture_coords_down_VBO = generateInstancedVBO(vao, 5, texture_down_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	texture_face_VBO = generateVBO(vao, 6, faces, 1, GL_FLOAT, GL_STATIC_DRAW);
+	texture_offsets_VBO = generateVBO(vao, 7, texture_offsets, 2, GL_FLOAT, GL_STATIC_DRAW);
 
-    textureId = generateTexture("spritesheet.png");
+
+    textureId = generateTexture("assets/spritesheet2.png");
+
+	buffer.create(4096);
+
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void scene_shading::awake() {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
-	mouse_x = x;
-	mouse_y = y;
+	mouse_x = float(x);
+	mouse_y = float(y);
 	glClearColor(208.0f / 255.0f, 183.0f / 255.0f, 249.0f / 255.0f, 1.0f);
 }
 
@@ -375,53 +539,329 @@ void scene_shading::sleep() {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
-void scene_shading::mainLoop() {
+void scene_shading::first_render() {
+	buffer.bind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glUseProgram(light_shader_program);
 
+
+	glUniformMatrix4fv(light_mvp_location, 1, GL_FALSE, &((light_proyection_matrix * light_view_matrix)[0][0]));
+
+	glDrawElementsInstanced(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr, offsets.size());
+
+	glUseProgram(0);
+	buffer.unbind();
+}
+
+void scene_shading::second_render() {
+	
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glUseProgram(shader_program);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+
+	float u_time = time::elapsed_time().count();
+	glUniform1f(time_location, u_time);
+	glUniform1i(texture_location, 0);
+	glUniform1i(light_texture_location, 1);
+
+	mat3 normal_matrix = mat3::transpose(mat3::inverse(mat3(0.5f)));
+	glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE,
+		&(normal_matrix[0][0]));
+	
+	glUniform3fv(camera_position_location, 1,
+		&(camera_position[0]));
+
+	glUniform3f(light_position_location, 10.0f, 20.0f, 10.0f);
+
+	mat4 view_matrix =
+		lookAt(camera_position, camera_position + forward, { 0.0f, 1.0f, 0.0f });
+	glUniformMatrix4fv(mvp_matrix_location, 1, GL_FALSE, &((proyection_matrix*view_matrix)[0][0]));
+	
+	glUniformMatrix4fv(shadow_light_mvp_location, 1, GL_FALSE, &((light_proyection_matrix * light_view_matrix)[0][0]));
+
+	glActiveTexture(GL_TEXTURE1);
+	buffer.bindDepthMap();
+
+	glDrawElementsInstanced(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr, offsets.size());
+
+	glActiveTexture(GL_TEXTURE1);
+	buffer.unbindDepthMap();
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glUseProgram(0);
+}
+
+//bool is_inside(const vec3& point, const vec3 &box) {
+//	float min_x = box.x - 0.5f;
+//	float min_y = box.y - 0.5f;
+//	float min_z = box.z - 0.5f;
+//	
+//	float max_x = box.x + 0.5f;
+//	float max_y = box.y + 0.5f;
+//	float max_z = box.z + 0.5f;
+//
+//	if (min_x < point.x && point.x  < max_x &&
+//		min_y < point.y && point.y  < max_y &&
+//		min_z < point.z && point.z  < max_z){
+//		return true;
+//	}
+//	return false;
+//}
+
+bool scene_shading::has_object(const vec3& v) {
+	if (is_outside(v)) {
+		return false;
+	}
+	int x = int(v.x);
+	int y = int(v.y);
+	int z = int(v.z);
+
+	return blocks[x][z][y] != 0;
+}
+
+bool scene_shading::is_outside(const vec3& v) {
+	if (v.x < 0 || MAP_SIZE < v.x ||
+		v.y < 0 || MAP_HEIGHT < v.y ||
+		v.z < 0 || MAP_SIZE < v.z) {
+		return true;
+	}
+	return false;
+}
+
+//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
+	//vector<vec3> result;
+	//if (!is_outside(origin)) {
+	//	result.push_back(origin);
+	//}
+
+	//vec3 position = origin;
+	//vec3 step = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
+	//vec3 t;
+	//vec3 direction = vec3::normalize(ray);
+	//vec3 current_ray;
+	//vec3 delta(1.0f, 1.0f, 1.0f);
+
+	//for (int i = 0; i < 3; i++) {
+	//	if (step[i] > 0) {
+	//		t[i] = abs((truncf(position[i] + step[i]) - position[i])/ direction[i]);
+	//	}
+	//	else if (step[i] < 0) {
+	//		t[i] = abs((position[i] - abs_ceil(position[i] + step[i]))/ direction[i]);
+	//	}
+	//}
+	//int cont = 20;
+	//while (cont--) {
+	//	for (int k = 0; k < 3; k++) {
+	//		float t_min = t[0];
+	//		int t_min_axis = 0;
+	//		for (int i = 0; i < 3; i++) {
+	//			if (t[i] < t_min) {
+	//				t_min = t[i];
+	//				t_min_axis = i;
+	//			}
+	//		}
+
+	//		vec3 current_ray = t_min*direction;
+
+	//		if(current_ray.magnitude() > 10.0f) {
+	//			return result;
+	//		}
+
+	//		position[t_min_axis] += step[t_min_axis];
+	//		t[t_min_axis] += delta[t_min_axis];
+	//		
+	//		if (!is_outside(position)) {
+	//			result.push_back(position);
+	//		}
+	//	}
+	//}
+
+	//return result;
+//}
+
+//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
+//	vector<vec3> result;
+//	
+//	if (!is_outside(origin)) {
+//		result.push_back(origin);
+//	}
+//
+//	vec3 t_max, t_delta;
+//	vec3 current_voxel;
+//	
+//	vec3 start = origin;
+//	vec3 end = origin + ray;
+//
+//	vec3 delta = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
+//
+//	for (int i = 0; i < 3; i++) {
+//		if (ray[i] == 0.0f){
+//			t_delta[i] = 100000.0f;
+//		}
+//		else {
+//			t_delta[i] = delta[i] / (ray[i]);
+//		}
+//		t_max[i] = t_delta[i] * (1.0f - abs(modf(start[i], &current_voxel[i])));
+//	}
+//
+//	while (true) {
+//		float t_min = t_max[0];
+//		int t_min_dimension = 0;
+//		for (int i = 1; i < 3; i++) {
+//			if (t_max[i] < t_min) {
+//				t_min = t_max[i];
+//				t_min_dimension = i;
+//			}
+//
+//		}
+//		current_voxel[t_min_dimension] += delta[t_min_dimension];
+//		t_max[t_min_dimension] += t_delta[t_min_dimension];
+//
+//		if(t_max.x > 1 && t_max.y > 1 && t_max.z > 1) break;
+//
+//		result.push_back(current_voxel);
+//	}
+//
+//	return result;
+//}
+
+vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
+	vector<vec3> result;
+
+	if (!is_outside(origin)) {
+		result.push_back(origin);
+	}
+
+	vec3 t_max, t_delta;
+	vec3 current_voxel = origin;
+	vec3 end = origin + ray;
+	end = vec3(int(end.x), int(end.y), int(end.z));
+
+	vec3 step = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
+
+	float border;
+	for (int i = 0; i < 3; i++) {
+		if (step[i] > 0.0f) {
+			border = floorf(origin[i] + 1.0f);
+		}
+		else {
+			border = ceilf(origin[i] - 1.0f);
+		}
+		if (AreEqual(ray[i], 0.0f)) {
+			t_max[i] = 100000.0f;
+			t_delta[i] = 100000.0f;
+		}
+		else {
+			t_max[i] = (border - origin[i]) / ray[i];
+			t_delta[i] = step[i] / ray[i];
+		}
+	}
+
+	vec3 current_voxel_int;
+	while (true) {
+		float t_min = t_max[0];
+		int t_min_dimension = 0;
+		for (int i = 1; i < 3; i++) {
+			if (t_max[i] < t_min) {
+				t_min = t_max[i];
+				t_min_dimension = i;
+			}
+		}
+		current_voxel[t_min_dimension] += step[t_min_dimension];
+		t_max[t_min_dimension] += t_delta[t_min_dimension];
+
+		if (t_max.x > 1  && t_max.y > 1 && t_max.z > 1) break;
+		/*current_voxel_int = vec3(int(current_voxel.x), int(current_voxel.y), int(current_voxel.z));
+		if (current_voxel == end) {
+			break;
+		}*/
+
+		result.push_back(current_voxel);
+	}
+
+	return result;
+}
+
+void scene_shading::update_map(std::atomic<bool>& program_is_running) {
+	
+	vector<vec3> m_offsets;
+	vector<vec2> m_texture_up_coords;
+	vector<vec2> m_texture_side_coords;
+	vector<vec2> m_texture_down_coords;
+
+	int start_x, end_x;
+	int start_z, end_z;
+	bool in_range;
+	int i, j, k, type;
+
+	while (program_is_running) {
+
+		m_offsets.clear();
+		m_texture_up_coords.clear();
+		m_texture_side_coords.clear();
+		m_texture_down_coords.clear();
+
+		m_offsets.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+		m_texture_up_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+		m_texture_side_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+		m_texture_down_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
+
+		start_x = max(int(camera_position.x - RENDER_DISTANCE), 0);
+		end_x = min(int(camera_position.x + RENDER_DISTANCE), MAP_SIZE);
+		start_z = max(int(camera_position.z - RENDER_DISTANCE), 0);
+		end_z = min(int(camera_position.z + RENDER_DISTANCE), MAP_SIZE);
+		
+		for (k = 0; k <= MAP_HEIGHT; k++) {
+			for (i = start_x; i <= end_x; i++) {
+				for (j = start_z; j <= end_z; j++) {
+					in_range = (vec3(i, 0.0f, j) - vec3(camera_position.x, 0.0f, camera_position.z)).magnitude() < RENDER_DISTANCE;
+
+					coords_to_offset_index[i][j][k] = 0;
+
+					if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
+						type = blocks[i][j][k] - 1;
+
+						m_texture_up_coords.push_back(get_texture_coords(textures[type].x_up, textures[type].y_up));
+						m_texture_side_coords.push_back(get_texture_coords(textures[type].x_side, textures[type].y_side));
+						m_texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
+
+						m_offsets.push_back(vec3(i, k, j));
+
+						coords_to_offset_index[i][j][k] = m_offsets.size();
+					}
+				}
+			}
+		}
+
+		std::cout << "updated" << std::endl;
+
+		offsets = m_offsets;
+		texture_up_coords = m_texture_up_coords;
+		texture_side_coords = m_texture_side_coords;
+		texture_down_coords = m_texture_down_coords;
+	}
+}
+
+void scene_shading::mainLoop() {
     handle_movement();
     handle_rotation();
     handle_gravity();
+	handle_raycasting();
+
+	light_view_matrix = lookAt(light_camera_position, { camera_position.x, 0.0f, camera_position.z }, { 0.0f, 1.0f, 0.0f });
 
     glBindVertexArray(vao);
-    glUseProgram(shader_program);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureId);
+	updateInstancedVBO(vao, offsets_coordsVBO, 1, offsets, 3, GL_FLOAT, GL_STATIC_DRAW, 1);
+	updateInstancedVBO(vao, texture_coords_up_VBO, 3, texture_up_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	updateInstancedVBO(vao, texture_coords_side_VBO, 4, texture_side_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	updateInstancedVBO(vao, texture_coords_down_VBO, 5, texture_down_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
 
-    float u_time = time::elapsed_time().count();
-    glUniform1f(time_location, u_time);
-    glUniform1i(texture_location, 0);
+	first_render();
+	second_render();
 
-    mat4 model_matrix = calculate_model_matrix(u_time);
-    glUniformMatrix4fv(model_matrix_location, 1, GL_FALSE,
-                       &(model_matrix[0][0]));
-
-    mat3 normal_matrix = mat3::transpose(
-        mat3::inverse(mat3(model_matrix[0], model_matrix[1], model_matrix[2])));
-    glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE,
-                       &(normal_matrix[0][0]));
-
-    glUniformMatrix4fv(proyection_matrix_location, 1, GL_FALSE,
-                       &(proyection_matrix[0][0]));
-
-    // mat4 camera_model_matrix = get_camera_model_matrix(u_time);
-    // mat4 view_matrix = mat4::inverse(camera_model_matrix);
-    mat4 view_matrix =
-        lookAt(camera_position, camera_position + forward, {0.0f, 1.0f, 0.0f});
-    glUniformMatrix4fv(view_matrix_location, 1, GL_FALSE, &(view_matrix[0][0]));
-
-    for (int i = 0; i < texture_count; i++) {
-        updateVBO(vao, texture_coordsVBO, 1, cube_texture_coords(i), 2,
-                  GL_FLOAT, GL_STATIC_DRAW);
-        updateInstancedVBO(vao, offsets_coordsVBO, 3, offsets[i], 3, GL_FLOAT,
-                           GL_STATIC_DRAW, 1);
-        glDrawElementsInstanced(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr,
-                                offsets[i].size());
-    }
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(0);
     glBindVertexArray(0);
 }
 
@@ -434,8 +874,7 @@ void scene_shading::resize(int width, int height) {
     glUseProgram(shader_program);
 
     proyection_matrix = mat4::transpose({
-        {1.0f /
-             (((width + 0.0f) / (height + 0.0f)) * tan(radians(60.0f) / 2.0f)),
+        {1.0f / (((width + 0.0f) / (height + 0.0f)) * tan(radians(60.0f) / 2.0f)),
          0.0f, 0.0f, 0.0f},
         {0.0f, 1.0f / (tan(radians(60.0f) / 2.0f)), 0.0f, 0.0f},
         {0.0f, 0.0f, -(1000.0f + 1.0f) / (1000.0f - 1.0f),
@@ -466,30 +905,30 @@ void scene_shading::handle_rotation() {
     }
 
     float rotation_speed = radians(delta_time);
-    vec2 rotation =
-        rotation_speed * vec2(pitch_input, yaw_input);
+    vec2 rotation = rotation_speed * vec2(yaw_input, pitch_input);
 
-    // mat4 rotate_camera = rotation_matrix(rotation.x, rotation.y, 0.0f);
-    mat4 rotate_camera = rotate_around(rotation.y, {0.0f, 1.0f, 0.0f}) *
-                         rotate_around(rotation.x, right);
+	const vec3 UP = { 0.0f, 1.0f, 0.0f };
+	mat4 yaw_rotation_matrix = rotate_around(rotation.x, UP);
+	mat4 pitch_rotation_matrix = rotate_around(rotation.y, right);
 
-	vec3 new_forward = rotate_camera * vec4(forward.x, forward.y, forward.z, 1.0f);
-	vec3 front = vec3::cross({0.0f, 1.0f, 0.0f}, right);
-	if (acosf(abs(vec3::dot(new_forward, front))) > radians(85.0f)) {
-		float likelihood = vec3::dot({0.0f, 1.0f, 0.0f}, new_forward);
-		float degrees = likelihood < 0.0f ? -85.0f: 85.0f;
-		forward = /*rotate_around(rotation.x, {0.0f, 1.0f, 0.0f}) * */ rotate_around(radians(degrees), right) * vec4(front.x, front.y, front.x, 1.0f);
+	vec3 new_forward = pitch_rotation_matrix * vec4(forward.x, forward.y, forward.z, 1.0f);
+	vec3 front = vec3::normalize(vec3::cross(UP, right));
+
+	float temp_dot = vec3::dot(new_forward, front);
+	float temp_dot2 = vec3::dot(UP, new_forward);
+	if (acosf(vec3::dot(new_forward, front)) > radians(89.0f)) {
+		bool is_looking_up = vec3::dot(UP, new_forward) > 0.0f;
+		float _radians = is_looking_up ? radians(89.0f): radians(-89.0f);
+		forward = yaw_rotation_matrix * rotate_around(_radians, right) * vec4(front.x, front.y, front.z, 1.0f);
+	
 	}
 	else {
-		forward = rotate_camera * vec4(forward.x, forward.y, forward.z, 1.0f);
+		forward = yaw_rotation_matrix * pitch_rotation_matrix * vec4(forward.x, forward.y, forward.z, 1.0f);
 	}
-    // mat4 pitch_rotation = rotation_matrix(0.0f, 0.0f);
-    // right = rotate_camera * vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    // forward = rotate_camera  * vec4( 0.0, 0.0, -1.0f, 1.0f );
-    // right = rotate_camera * vec4(right.x, right.y, right.z, 1.0f);
-    forward = vec3::normalize(forward);
-    right = vec3::cross(forward, {0.0f, 1.0f, 0.0f});
-    upward = vec3::cross(right, forward);
+
+	forward = vec3::normalize(forward);
+    right = vec3::normalize(vec3::cross(forward, UP));
+    upward = vec3::normalize(vec3::cross(right, forward));
 }
 
 void scene_shading::handle_movement() {
@@ -499,17 +938,53 @@ void scene_shading::handle_movement() {
         return;
     }
 
-    float speed = 10.0 * delta_time;
+    float speed = 10.0f * delta_time;
     vec2 movement =
-        speed * vec2::normalize(vec2(horizontal_input, vertical_input));
+        speed * vec2::normalize(vec2(float(horizontal_input), float(vertical_input)));
 
-    camera_position.x += (right * movement.x).x + (forward * movement.y).x;
-    camera_position.z += (right * movement.x).z + (forward * movement.y).z;
+	vec3 front = vec3::normalize(vec3::cross({ 0.0f, 1.0f, 0.0f }, right));
+
+	camera_position.x += (right * movement.x).x + (front * movement.y).x;
+	camera_position.z += (right * movement.x).z + (front * movement.y).z;
+
+	light_camera_position.x += (right * movement.x).x + (front * movement.y).x;
+	light_camera_position.z += (right * movement.x).z + (front * movement.y).z;
+}
+
+void scene_shading::handle_raycasting() {
+	// Aun no funciona esta parte
+	//if (!mouse_input) {
+	//	return;
+	//}
+
+	//mat4 inv_mat = mat4::inverse(proyection_matrix);
+
+	//vector<vec3> _voxels = voxels(vec4(forward, 1.0f) * 10, camera_position);
+	//for (auto &voxel : _voxels) {
+	//	if (has_object(voxel)) {
+	//		int x = int(voxel.x);
+	//		int y = int(voxel.y);
+	//		int z = int(voxel.z);
+
+	//		int index = coords_to_offset_index[x][z][y];
+
+	//		texture_up_coords[index] = get_texture_coords(WATER_TEXTURE.x_up, WATER_TEXTURE.y_up);
+
+	//		return;
+	//		//std::cout << "block: " << blocks[x][z][y] << std::endl;
+	//		//if (mouse_input) {
+	//			//blocks[x][z][y] = 0;
+	//		//}
+	//		//std::cout << "" << std::endl;
+	//	}
+	//}
+	//mouse_input = 0;
 }
 
 void scene_shading::keysDown(int key) {
     if (key == GLFW_KEY_C) {
         compile_shaders();
+        compile_light_shaders();
     }
     if (key == GLFW_KEY_W) {
         vertical_input = 1;
@@ -562,27 +1037,14 @@ void scene_shading::keysUp(int key) {
     if (key == GLFW_KEY_X && up_input == -1) {
         up_input = 0;
     }
-    /*if (key == GLFW_KEY_UP && pitch_input == -1) {
-        pitch_input = 0;
-    }
-    if (key == GLFW_KEY_DOWN && pitch_input == 1) {
-        pitch_input = 0;
-    }
-    if (key == GLFW_KEY_RIGHT && yaw_input == 1) {
-        yaw_input = 0;
-    }
-    if (key == GLFW_KEY_LEFT && yaw_input == -1) {
-        yaw_input = 0;
-    }*/
     if (key == GLFW_KEY_LEFT_CONTROL) {
         capture_mouse = !capture_mouse;
-        std::cout << capture_mouse << std::endl;
         if (capture_mouse) {
 			double x;
 			double y;
 			glfwGetCursorPos(window, &x, &y);
-			mouse_x = x;
-			mouse_y = y;
+			mouse_x = float(x);
+			mouse_y = float(y);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         } else {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -591,9 +1053,6 @@ void scene_shading::keysUp(int key) {
 }
 
 void scene_shading::passiveMotion(float x, float y) {
-
-	std::cout << x << " " << y << std::endl;
-
 	if (!capture_mouse) {
 		return;
 	}
@@ -601,4 +1060,76 @@ void scene_shading::passiveMotion(float x, float y) {
 	delta_y = (mouse_y - y);
 	mouse_x = x;
 	mouse_y = y;
+}
+
+void scene_shading::mouseButton(int button, int action) {
+	std::cout << "clicked!" << std::endl;
+	mouse_input = 1;
+}
+
+void scene_shading::init_poisson() {
+	poisson_disk[0] = vec2(-0.613392, 0.617481);
+	poisson_disk[1] = vec2(0.170019, -0.040254);
+	poisson_disk[2] = vec2(-0.299417, 0.791925);
+	poisson_disk[3] = vec2(0.645680, 0.493210);
+	poisson_disk[4] = vec2(-0.651784, 0.717887);
+	poisson_disk[5] = vec2(0.421003, 0.027070);
+	poisson_disk[6] = vec2(-0.817194, -0.271096);
+	poisson_disk[7] = vec2(-0.705374, -0.668203);
+	poisson_disk[8] = vec2(0.977050, -0.108615);
+	poisson_disk[9] = vec2(0.063326, 0.142369);
+	poisson_disk[10] = vec2(0.203528, 0.214331);
+	poisson_disk[11] = vec2(-0.667531, 0.326090);
+	poisson_disk[12] = vec2(-0.098422, -0.295755);
+	poisson_disk[13] = vec2(-0.885922, 0.215369);
+	poisson_disk[14] = vec2(0.566637, 0.605213);
+	poisson_disk[15] = vec2(0.039766, -0.396100);
+	poisson_disk[16] = vec2(0.751946, 0.453352);
+	poisson_disk[17] = vec2(0.078707, -0.715323);
+	poisson_disk[18] = vec2(-0.075838, -0.529344);
+	poisson_disk[19] = vec2(0.724479, -0.580798);
+	poisson_disk[20] = vec2(0.222999, -0.215125);
+	poisson_disk[21] = vec2(-0.467574, -0.405438);
+	poisson_disk[22] = vec2(-0.248268, -0.814753);
+	poisson_disk[23] = vec2(0.354411, -0.887570);
+	poisson_disk[24] = vec2(0.175817, 0.382366);
+	poisson_disk[25] = vec2(0.487472, -0.063082);
+	poisson_disk[26] = vec2(-0.084078, 0.898312);
+	poisson_disk[27] = vec2(0.488876, -0.783441);
+	poisson_disk[28] = vec2(0.470016, 0.217933);
+	poisson_disk[29] = vec2(-0.696890, -0.549791);
+	poisson_disk[30] = vec2(-0.149693, 0.605762);
+	poisson_disk[31] = vec2(0.034211, 0.979980);
+	poisson_disk[32] = vec2(0.503098, -0.308878);
+	poisson_disk[33] = vec2(-0.016205, -0.872921);
+	poisson_disk[34] = vec2(0.385784, -0.393902);
+	poisson_disk[35] = vec2(-0.146886, -0.859249);
+	poisson_disk[36] = vec2(0.643361, 0.164098);
+	poisson_disk[37] = vec2(0.634388, -0.049471);
+	poisson_disk[38] = vec2(-0.688894, 0.007843);
+	poisson_disk[39] = vec2(0.464034, -0.188818);
+	poisson_disk[40] = vec2(-0.440840, 0.137486);
+	poisson_disk[41] = vec2(0.364483, 0.511704);
+	poisson_disk[42] = vec2(0.034028, 0.325968);
+	poisson_disk[43] = vec2(0.099094, -0.308023);
+	poisson_disk[44] = vec2(0.693960, -0.366253);
+	poisson_disk[45] = vec2(0.678884, -0.204688);
+	poisson_disk[46] = vec2(0.001801, 0.780328);
+	poisson_disk[47] = vec2(0.145177, -0.898984);
+	poisson_disk[48] = vec2(0.062655, -0.611866);
+	poisson_disk[49] = vec2(0.315226, -0.604297);
+	poisson_disk[50] = vec2(-0.780145, 0.486251);
+	poisson_disk[51] = vec2(-0.371868, 0.882138);
+	poisson_disk[52] = vec2(0.200476, 0.494430);
+	poisson_disk[53] = vec2(-0.494552, -0.711051);
+	poisson_disk[54] = vec2(0.612476, 0.705252);
+	poisson_disk[55] = vec2(-0.578845, -0.768792);
+	poisson_disk[56] = vec2(-0.772454, -0.090976);
+	poisson_disk[57] = vec2(0.504440, 0.372295);
+	poisson_disk[58] = vec2(0.155736, 0.065157);
+	poisson_disk[59] = vec2(0.391522, 0.849605);
+	poisson_disk[60] = vec2(-0.620106, -0.328104);
+	poisson_disk[61] = vec2(0.789239, -0.419965);
+	poisson_disk[62] = vec2(-0.545396, 0.538133);
+	poisson_disk[63] = vec2(-0.178564, -0.596057);
 }

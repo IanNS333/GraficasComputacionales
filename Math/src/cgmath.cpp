@@ -17,24 +17,24 @@ float radians(float degrees) {
 	return degrees * ((float)M_PI / 180.0f);
 }
 
-mat4 rotate_around(const float &angles, const vec3 &v) {
-	vec3 unit = vec3::normalize(v);
+mat4 rotate_around(const float &radians, const vec3 &v) {
+	vec3 u = vec3::normalize(v);
 
-	float uxx = unit.x * unit.x;
-	float uxy = unit.x * unit.y;
-	float uxz = unit.x * unit.z;
-	float uyy = unit.y * unit.y;
-	float uyz = unit.y * unit.z;
-	float uzz = unit.z * unit.z;
+	float uxx = u.x * u.x;
+	float uxy = u.x * u.y;
+	float uxz = u.x * u.z;
+	float uyy = u.y * u.y;
+	float uyz = u.y * u.z;
+	float uzz = u.z * u.z;
 
-	float cosAngle = cosf(angles);
-	float sinAngle = sinf(angles);
+	float cosAngle = cosf(radians);
+	float sinAngle = sinf(radians);
 	
 	return mat4::transpose({
-		{cosAngle + uxx * (1 - cosAngle), uxy*(1 - cosAngle) - unit.z*sinAngle, uxz * (1 - cosAngle) + unit.y * sinAngle, 0.0f},
-		{uxy * (1 - cosAngle) + unit.z * sinAngle, cosAngle + uyy*(1-cosAngle), uyz * (1-cosAngle) - unit.x*sinAngle, 0.0f},
-		{uxz * (1-cosAngle) - unit.y*sinAngle, uyz * (1- cosAngle) + unit.x * sinAngle, cosAngle + uzz * (1-cosAngle) , 0.0f},
-		{0.0f, 0.0f, 0.0f, 1.0f}
+		{cosAngle + uxx * (1.0f - cosAngle)			, uxy * (1.0f - cosAngle) - u.z * sinAngle	, uxz * (1.0f - cosAngle) + u.y * sinAngle	, 0.0f},
+		{uxy * (1.0f - cosAngle) + u.z * sinAngle	, cosAngle + uyy*(1.0f-cosAngle)			, uyz * (1.0f - cosAngle) - u.x * sinAngle	, 0.0f},
+		{uxz * (1.0f - cosAngle) - u.y * sinAngle	, uyz * (1.0f - cosAngle) + u.x * sinAngle	, cosAngle + uzz * (1.0f-cosAngle)			, 0.0f},
+		{0.0f										, 0.0f										, 0.0f										, 1.0f}
 	});
 }
 
@@ -78,18 +78,39 @@ mat4 rotation_matrix(const vec3 &v) {
 	return rotation_matrix(v.x, v.y, v.z);
 }
 
+//mat4 lookAt(const vec3 &camera, const vec3 &target, const vec3 &up) {
+//	vec3 f = vec3::normalize(target - camera);
+//	vec3 u = vec3::normalize(up);
+//	vec3 s = vec3::normalize(vec3::cross(f, u));
+//	u = vec3::cross(s, f);
+//	
+//	return mat4::transpose(mat4(
+//		{ s.x, s.y, s.z, -vec3::dot(s, camera)},
+//		{ u.x, u.y, u.z, -vec3::dot(u, camera) },
+//		{ -f.x, -f.y, -f.z, vec3::dot(f, camera) },
+//		{0.0f, 0.0f, 0.0f, 1.0f}
+//	));
+//}
+
 mat4 lookAt(const vec3 &camera, const vec3 &target, const vec3 &up) {
-	vec3 f = vec3::normalize(target - camera);
-	vec3 u = vec3::normalize(up);
-	vec3 s = vec3::normalize(vec3::cross(f, u));
-	u = vec3::cross(s, f);
-	
-	return mat4::transpose(mat4(
-		{ s.x, s.y, s.z, -vec3::dot(s, camera)},
-		{ u.x, u.y, u.z, -vec3::dot(u, camera) },
-		{ -f.x, -f.y, -f.z, vec3::dot(f, camera) },
-		{0.0f, 0.0f, 0.0f, 1.0f}
-	));
+	vec3 z = vec3::normalize(camera - target);
+	vec3 x = vec3::normalize(vec3::cross(up, z));
+	vec3 y = vec3::normalize(vec3::cross(z, x));
+
+	mat4 orientation = {
+		{x.x, y.x, z.x, 0.0f},
+		{x.y, y.y, z.y, 0.0f},
+		{x.z, y.z, z.z, 0.0f},
+		{0.0f, 0.0f, 0.0f, 1.0f},
+	};
+	mat4 translation = {
+		{ 1.0f, 0.0f, 0.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f, 0.0f },
+		{ -camera.x, -camera.y, -camera.z, 1.0f }
+	};
+
+	return orientation * translation;
 }
 
 }

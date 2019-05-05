@@ -2,11 +2,12 @@
 
 #include <iostream>
 
-#include <vec4.h>
 
 using std::ostream;
 
 namespace cgmath {
+
+class vec4;
 
 class vec3 {
 public:

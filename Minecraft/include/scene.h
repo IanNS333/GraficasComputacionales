@@ -9,6 +9,8 @@
 #include <IL/il.h>
 #include <string>
 #include <vector>
+#include <thread>
+#include <atomic>
 
 struct shader_file {
     shader_file(std::string path, GLenum type) : path(path), type(type) {}
@@ -35,12 +37,13 @@ class scene {
     virtual void keysDown(int key) = 0;
     virtual void keysUp(int key) = 0;
     virtual void passiveMotion(float x, float y) = 0;
+	virtual void mouseButton(int button, int action) = 0;
 
     GLuint generateShaderProgram(std::vector<shader_file> shaders,
                                  std::vector<std::string> variables = {});
     GLuint generateTexture(std::string path,
-                           GLenum min_filter = GL_LINEAR,
-                           GLenum mag_filter = GL_LINEAR,
+                           GLenum min_filter = GL_NEAREST,
+                           GLenum mag_filter = GL_NEAREST,
                            GLenum wrap_s = GL_REPEAT,
                            GLenum wrap_t = GL_REPEAT);
 

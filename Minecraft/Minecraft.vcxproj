@@ -64,20 +64,35 @@
     <Link>
       <AdditionalDependencies>assimp-vc140-mt.lib;DevIL.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)shaders" "$(ProjectDir)..\bin\Minecraft\shaders\" /Y
+xcopy "$(ProjectDir)assets" "$(ProjectDir)..\bin\Minecraft\assets\" /Y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <Optimization>Disabled</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\include\;$(SolutionDir)Math\include\;$(SolutionDir)Util\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <DebugInformationFormat>None</DebugInformationFormat>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
     </ClCompile>
     <Link>
       <AdditionalDependencies>assimp-vc140-mt.lib;DevIL.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)shaders" "$(ProjectDir)..\bin\Minecraft\shaders\" /Y
+xcopy "$(ProjectDir)assets" "$(ProjectDir)..\bin\Minecraft\assets\" /Y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\depth_buffer.cpp" />
     <ClCompile Include="src\glad.c" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\scene.cpp" />
@@ -93,27 +108,24 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\depth_buffer.h" />
     <ClInclude Include="include\perlin_noise.h" />
     <ClInclude Include="include\scene.h" />
     <ClInclude Include="include\scene_manager.h" />
     <ClInclude Include="include\scene_shading.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\circle.frag" />
-    <None Include="shaders\cube.frag" />
-    <None Include="shaders\cube.vert" />
     <None Include="shaders\cube_shading.vert" />
     <None Include="shaders\cube_texture.frag" />
     <None Include="shaders\cube_texture.vert" />
-    <None Include="shaders\grid.vert" />
+    <None Include="shaders\depth.frag" />
+    <None Include="shaders\depth.vert" />
     <None Include="shaders\lambertian.frag" />
-    <None Include="shaders\palmera.frag" />
     <None Include="shaders\cube_shading.frag" />
-    <None Include="shaders\simple.vert" />
-    <None Include="shaders\simple_color.vert" />
-    <None Include="shaders\sphere.vert" />
-    <None Include="shaders\solid_color.frag" />
-    <None Include="shaders\circle_grid.vert" />
+    <None Include="shaders\shadow.frag" />
+    <None Include="shaders\shadow.vert" />
+    <None Include="shaders\test.frag" />
+    <None Include="shaders\test.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

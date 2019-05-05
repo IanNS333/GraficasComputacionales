@@ -5,12 +5,15 @@
 #include <math.h>
 #include "ray.h"
 #include "utils.h"
+#include "u_vec3.h"
 
 using utils::random_point_in_unit_disk;
 
+using utils::u_vec3;
+
 class camera {
 	public:
-		camera(vec3 lookfrom, vec3 lookat, vec3 vup, float vfov, float aspect, float aperture, float focus_dist) { // vfov is top to bottom in degrees
+		camera(u_vec3 lookfrom, u_vec3 lookat, u_vec3 vup, float vfov, float aspect, float aperture, float focus_dist) { // vfov is top to bottom in degrees
 
 			lens_radius = aperture / 2;
 
@@ -30,15 +33,15 @@ class camera {
 		}
 
 		ray get_ray(float s, float t) const {
-			vec3 rd = lens_radius * random_point_in_unit_disk();
-			vec3 offset = u * rd.x() + v * rd.y();
+			u_vec3 rd = lens_radius * random_point_in_unit_disk();
+			u_vec3 offset = u * rd.x() + v * rd.y();
 			return ray(origin + offset, lowerLeftCorner + s * horizontal + t * vertical - origin - offset);
 		}
 
-		vec3 lowerLeftCorner;
-		vec3 horizontal;
-		vec3 vertical;
-		vec3 origin;
-		vec3 u, v, w;
+		u_vec3 lowerLeftCorner;
+		u_vec3 horizontal;
+		u_vec3 vertical;
+		u_vec3 origin;
+		u_vec3 u, v, w;
 		float lens_radius;
 };

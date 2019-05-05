@@ -1,10 +1,10 @@
 #pragma once
 
 #include "material.h"
-#include "vec3.h"
+#include "u_vec3.h"
 #include "utils.h"
 
-using utils::vec3;
+using utils::u_vec3;
 using utils::reflect;
 using utils::refract;
 using utils::schlick;
@@ -14,13 +14,13 @@ class dielectric : public material {
 	public:
 		dielectric(float ri) : ref_idx(ri) { }
 
-		virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
-			vec3 outward_normal;
-			vec3 reflected = reflect(r_in.direction(), rec.normal);
+		virtual bool scatter(const ray& r_in, const hit_record& rec, u_vec3& attenuation, ray& scattered) const {
+			u_vec3 outward_normal;
+			u_vec3 reflected = reflect(r_in.direction(), rec.normal);
 
 			float ni_over_nt;
-			attenuation = vec3(1.0, 1.0, 1.0);
-			vec3 refracted;
+			attenuation = u_vec3(1.0, 1.0, 1.0);
+			u_vec3 refracted;
 
 			float reflect_prob;
 			float cosine;

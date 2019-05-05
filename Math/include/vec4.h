@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include "vec3.h"
+
 using std::ostream;
 
 namespace cgmath {
@@ -11,6 +13,7 @@ public:
 
 	vec4();
 	vec4(float x, float y, float z, float w);
+	vec4(const vec3& v1, float w);
 
 	float& operator[](int i);
 	const float& operator[](int i) const;

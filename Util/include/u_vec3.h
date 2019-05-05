@@ -60,7 +60,7 @@ inline std::ostream& operator<<(std::ostream &os, const u_vec3 &t) {
 }
 
 inline void u_vec3::make_unit_vector() {
-	float k = 1.0 / sqrt((e[0] * e[0]) + (e[1] * e[1]) + (e[2] * e[2]));
+	float k = 1.0f / sqrtf((e[0] * e[0]) + (e[1] * e[1]) + (e[2] * e[2]));
 	e[0] *= k;
 	e[1] *= k;
 	e[2] *= k;
@@ -146,7 +146,7 @@ inline u_vec3& u_vec3::operator*=(const float t) {
 }
 
 inline u_vec3& u_vec3::operator/=(const float t) {
-	float k = 1.0 / t;
+	float k = 1.0f / t;
 
 	e[0] *= k;
 	e[1] *= k;
