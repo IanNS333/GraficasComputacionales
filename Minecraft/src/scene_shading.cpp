@@ -14,6 +14,7 @@
 #include "time_utils.h"
 #include "vec2.h"
 #include "vec3.h"
+#include "vec3d.h"
 #include "vec4.h"
 #include "utils.h"
 
@@ -26,6 +27,7 @@ using cgmath::rotation_matrix;
 using cgmath::translation_matrix;
 using cgmath::vec2;
 using cgmath::vec3;
+using cgmath::vec3d;
 using cgmath::vec4;
 using cgmath::AreEqual;
 using utils::randf;
@@ -35,7 +37,7 @@ using std::atomic;
 using std::truncf;
 
 float sign(float val) {
-	return val < 0 ? -1 : val > 0 ? 1 : 0 ;
+	return val < 0.0f ? -1.0f : val > 0.0f ? 1.0f : 0.0f ;
 }
 
 vec3 sign(const vec3& v) {
@@ -264,6 +266,44 @@ bool scene_shading::is_block_visible(int i, int j, int k) {
     return false;
 }
 
+void scene_shading::make_near_blocks_visible(int i, int j, int k) {
+	int a_start = i == 0 ? 0 : -1;
+	int a_end = i == MAP_SIZE ? 0 : 1;
+
+	int b_start = j == 0 ? 0 : -1;
+	int b_end = j == MAP_SIZE ? 0 : 1;
+
+	int c_start = k == 0 ? 0 : -1;
+	int c_end = k == MAP_HEIGHT ? 0 : 1;
+
+	int ni, nj, nk;
+	
+	for (int a = a_start; a <= a_end; a++) {
+		for (int b = b_start; b <= b_end; b++) {
+			for (int c = c_start; c <= c_end; c++) {
+				ni = i + a;
+				nj = j + b;
+				nk = k + c;
+
+				if (blocks[ni][nj][nk] != 0 && coords_to_offset_index[ni][nj][nk] == 0) {
+					add_block(ni, nj, nk, blocks[ni][nj][nk]);
+				}
+			}
+		}
+	}
+}
+
+void scene_shading::add_block(int i, int j, int k, int type) {
+	blocks[i][j][k] = type;
+
+	texture_up_coords.push_back(get_texture_coords(textures[type - 1].x_up, textures[type - 1].y_up));
+	texture_side_coords.push_back(get_texture_coords(textures[type - 1].x_side, textures[type - 1].y_side));
+	texture_down_coords.push_back(get_texture_coords(textures[type - 1].x_down, textures[type - 1].y_down));
+
+	coords_to_offset_index[i][j][k] = offsets.size();
+	offsets.push_back(vec3(i + 0.5f, k + 0.5f, j + 0.5f));
+}
+
 void scene_shading::generate_tree(int i, int j, int k, int biome) {
 	int leaves = 0;
 	int wood = 0;
@@ -426,19 +466,10 @@ void scene_shading::generate_map() {
 	for (int k = 0; k <= MAP_HEIGHT; k++) {
 		for (int i = start_x; i <= end_x; i++) {
 			for (int j = start_z; j <= end_z; j++) {
-
 				coords_to_offset_index[i][j][k] = 0;
 				bool in_range = (vec3(i, k, j) - camera_position).magnitude() < RENDER_DISTANCE;
 				if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
-					int type = blocks[i][j][k] - 1;
-
-					texture_up_coords.push_back(get_texture_coords(textures[type].x_up, textures[type].y_up));
-					texture_side_coords.push_back(get_texture_coords(textures[type].x_side, textures[type].y_side));
-					texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
-
-					//offsets.push_back(vec3(i - MAP_SIZE/2.0f, k, j - MAP_SIZE/2.0f));
-					coords_to_offset_index[i][j][k] = offsets.size();
-					offsets.push_back(vec3(i, k, j));
+					add_block(i,j,k, blocks[i][j][k]);
 				}
 			}
 		}
@@ -519,7 +550,7 @@ void scene_shading::init() {
 
     textureId = generateTexture("assets/spritesheet2.png");
 
-	buffer.create(4096);
+	buffer.create(8192);
 
 	//glEnable(GL_BLEND);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -743,15 +774,15 @@ vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
 
 	float border;
 	for (int i = 0; i < 3; i++) {
-		if (step[i] > 0.0f) {
-			border = floorf(origin[i] + 1.0f);
+		if (step[i] > 0.0) {
+			border = floor(origin[i] + 1.0);
 		}
 		else {
-			border = ceilf(origin[i] - 1.0f);
+			border = ceil(origin[i] - 1.0);
 		}
-		if (AreEqual(ray[i], 0.0f)) {
-			t_max[i] = 100000.0f;
-			t_delta[i] = 100000.0f;
+		if (AreEqual(ray[i], 0.0)) {
+			t_max[i] = 100000.0;
+			t_delta[i] = 100000.0;
 		}
 		else {
 			t_max[i] = (border - origin[i]) / ray[i];
@@ -759,7 +790,6 @@ vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
 		}
 	}
 
-	vec3 current_voxel_int;
 	while (true) {
 		float t_min = t_max[0];
 		int t_min_dimension = 0;
@@ -772,17 +802,71 @@ vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
 		current_voxel[t_min_dimension] += step[t_min_dimension];
 		t_max[t_min_dimension] += t_delta[t_min_dimension];
 
-		if (t_max.x > 1  && t_max.y > 1 && t_max.z > 1) break;
-		/*current_voxel_int = vec3(int(current_voxel.x), int(current_voxel.y), int(current_voxel.z));
-		if (current_voxel == end) {
-			break;
-		}*/
+		//if (t_max.x > 1  && t_max.y > 1 && t_max.z > 1) break;
+		if ((current_voxel - origin).magnitude() > ray.magnitude()) break;
 
 		result.push_back(current_voxel);
 	}
 
 	return result;
 }
+
+//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
+//	vector<vec3> result;
+//
+//	if (!is_outside(origin)) {
+//		result.push_back(origin);
+//	}
+//
+//	vec3 t_max, t_delta;
+//	vec3 current_voxel = origin;
+//	vec3 end = origin + ray;
+//	end = vec3(int(end.x), int(end.y), int(end.z));
+//
+//	vec3 step = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
+//
+//	float border;
+//	for (int i = 0; i < 3; i++) {
+//		if (step[i] > 0.0f) {
+//			border = floor(origin[i] + 1.0f);
+//		}
+//		else {
+//			border = ceil(origin[i] - 1.0f);
+//		}
+//		if (AreEqual(ray[i], 0.0f)) {
+//			t_max[i] = 100000.0f;
+//			t_delta[i] = 100000.0f;
+//		}
+//		else {
+//			t_max[i] = (border - origin[i]) / ray[i];
+//			t_delta[i] = step[i] / ray[i];
+//		}
+//	}
+//
+//	vec3 current_voxel_int;
+//	while (true) {
+//		float t_min = t_max[0];
+//		int t_min_dimension = 0;
+//		for (int i = 1; i < 3; i++) {
+//			if (t_max[i] < t_min) {
+//				t_min = t_max[i];
+//				t_min_dimension = i;
+//			}
+//		}
+//		current_voxel = origin + (t_min * ray);
+//		t_max[t_min_dimension] += t_delta[t_min_dimension];
+//
+//		if (t_max.x > 1 && t_max.y > 1 && t_max.z > 1) break;
+//		//current_voxel_int = vec3(int(current_voxel.x), int(current_voxel.y), int(current_voxel.z));
+//		//if (current_voxel == end) {
+//		//	break;
+//		//}
+//
+//		result.push_back(current_voxel);
+//	}
+//
+//	return result;
+//}
 
 void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 	
@@ -819,7 +903,6 @@ void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 					in_range = (vec3(i, 0.0f, j) - vec3(camera_position.x, 0.0f, camera_position.z)).magnitude() < RENDER_DISTANCE;
 
 					coords_to_offset_index[i][j][k] = 0;
-
 					if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
 						type = blocks[i][j][k] - 1;
 
@@ -827,9 +910,8 @@ void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 						m_texture_side_coords.push_back(get_texture_coords(textures[type].x_side, textures[type].y_side));
 						m_texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
 
-						m_offsets.push_back(vec3(i, k, j));
-
 						coords_to_offset_index[i][j][k] = m_offsets.size();
+						m_offsets.push_back(vec3(i + 0.5f, k + 0.5f, j + 0.5f));
 					}
 				}
 			}
@@ -951,34 +1033,76 @@ void scene_shading::handle_movement() {
 	light_camera_position.z += (right * movement.x).z + (front * movement.y).z;
 }
 
+void scene_shading::handle_add_block() {
+	vector<vec3> _voxels = voxels(forward * 10.0f, camera_position);
+	vec3 prev_voxel;
+	for (auto &voxel : _voxels) {
+		if (has_object(voxel)) {
+			int x = int(prev_voxel.x);
+			int y = int(prev_voxel.y);
+			int z = int(prev_voxel.z);
+
+			add_block(x, z, y, WOOD_TYPE);
+			return;
+		}
+		else {
+			prev_voxel = voxel;
+		}
+	}
+}
+
+void scene_shading::handle_remove_block() {
+	vector<vec3> _voxels = voxels(forward * 10.0f, camera_position);
+	for (auto &voxel : _voxels) {
+		if (has_object(voxel)) {
+			int x = int(voxel.x);
+			int y = int(voxel.y);
+			int z = int(voxel.z);
+
+			make_near_blocks_visible(x, z, y);
+
+			blocks[x][z][y] = 0;
+
+			int nx = int(offsets[offsets.size() - 1].x);
+			int ny = int(offsets[offsets.size() - 1].y);
+			int nz = int(offsets[offsets.size() - 1].z);
+
+			int index = coords_to_offset_index[x][z][y];
+			coords_to_offset_index[nx][nz][ny] = index;
+			coords_to_offset_index[x][z][y] = 0;
+
+			offsets[index] = offsets[offsets.size() - 1];
+			offsets.pop_back();
+
+			texture_up_coords[index] = texture_up_coords[texture_up_coords.size() - 1];
+			texture_up_coords.pop_back();
+
+			texture_side_coords[index] = texture_side_coords[texture_side_coords.size() - 1];
+			texture_side_coords.pop_back();
+
+			texture_down_coords[index] = texture_down_coords[texture_down_coords.size() - 1];
+			texture_down_coords.pop_back();
+
+
+
+			return;
+		}
+	}
+}
+
 void scene_shading::handle_raycasting() {
-	// Aun no funciona esta parte
-	//if (!mouse_input) {
-	//	return;
-	//}
 
-	//mat4 inv_mat = mat4::inverse(proyection_matrix);
+	if (mouse_input == 0) {
+		return;
+	}
+	if (mouse_input == 1) {
+		handle_remove_block();
+	}
+	if (mouse_input == 2) {
+		handle_add_block();
+	}
 
-	//vector<vec3> _voxels = voxels(vec4(forward, 1.0f) * 10, camera_position);
-	//for (auto &voxel : _voxels) {
-	//	if (has_object(voxel)) {
-	//		int x = int(voxel.x);
-	//		int y = int(voxel.y);
-	//		int z = int(voxel.z);
-
-	//		int index = coords_to_offset_index[x][z][y];
-
-	//		texture_up_coords[index] = get_texture_coords(WATER_TEXTURE.x_up, WATER_TEXTURE.y_up);
-
-	//		return;
-	//		//std::cout << "block: " << blocks[x][z][y] << std::endl;
-	//		//if (mouse_input) {
-	//			//blocks[x][z][y] = 0;
-	//		//}
-	//		//std::cout << "" << std::endl;
-	//	}
-	//}
-	//mouse_input = 0;
+	mouse_input = 0;
 }
 
 void scene_shading::keysDown(int key) {
@@ -1063,73 +1187,81 @@ void scene_shading::passiveMotion(float x, float y) {
 }
 
 void scene_shading::mouseButton(int button, int action) {
-	std::cout << "clicked!" << std::endl;
-	mouse_input = 1;
+	if (action == GLFW_PRESS) {
+		if (button == GLFW_MOUSE_BUTTON_LEFT) {
+			std::cout << "left clicked!" << std::endl;
+			mouse_input = 1;
+		}
+		if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+			std::cout << "right clicked!" << std::endl;
+			mouse_input = 2;
+		}
+	}
 }
 
 void scene_shading::init_poisson() {
-	poisson_disk[0] = vec2(-0.613392, 0.617481);
-	poisson_disk[1] = vec2(0.170019, -0.040254);
-	poisson_disk[2] = vec2(-0.299417, 0.791925);
-	poisson_disk[3] = vec2(0.645680, 0.493210);
-	poisson_disk[4] = vec2(-0.651784, 0.717887);
-	poisson_disk[5] = vec2(0.421003, 0.027070);
-	poisson_disk[6] = vec2(-0.817194, -0.271096);
-	poisson_disk[7] = vec2(-0.705374, -0.668203);
-	poisson_disk[8] = vec2(0.977050, -0.108615);
-	poisson_disk[9] = vec2(0.063326, 0.142369);
-	poisson_disk[10] = vec2(0.203528, 0.214331);
-	poisson_disk[11] = vec2(-0.667531, 0.326090);
-	poisson_disk[12] = vec2(-0.098422, -0.295755);
-	poisson_disk[13] = vec2(-0.885922, 0.215369);
-	poisson_disk[14] = vec2(0.566637, 0.605213);
-	poisson_disk[15] = vec2(0.039766, -0.396100);
-	poisson_disk[16] = vec2(0.751946, 0.453352);
-	poisson_disk[17] = vec2(0.078707, -0.715323);
-	poisson_disk[18] = vec2(-0.075838, -0.529344);
-	poisson_disk[19] = vec2(0.724479, -0.580798);
-	poisson_disk[20] = vec2(0.222999, -0.215125);
-	poisson_disk[21] = vec2(-0.467574, -0.405438);
-	poisson_disk[22] = vec2(-0.248268, -0.814753);
-	poisson_disk[23] = vec2(0.354411, -0.887570);
-	poisson_disk[24] = vec2(0.175817, 0.382366);
-	poisson_disk[25] = vec2(0.487472, -0.063082);
-	poisson_disk[26] = vec2(-0.084078, 0.898312);
-	poisson_disk[27] = vec2(0.488876, -0.783441);
-	poisson_disk[28] = vec2(0.470016, 0.217933);
-	poisson_disk[29] = vec2(-0.696890, -0.549791);
-	poisson_disk[30] = vec2(-0.149693, 0.605762);
-	poisson_disk[31] = vec2(0.034211, 0.979980);
-	poisson_disk[32] = vec2(0.503098, -0.308878);
-	poisson_disk[33] = vec2(-0.016205, -0.872921);
-	poisson_disk[34] = vec2(0.385784, -0.393902);
-	poisson_disk[35] = vec2(-0.146886, -0.859249);
-	poisson_disk[36] = vec2(0.643361, 0.164098);
-	poisson_disk[37] = vec2(0.634388, -0.049471);
-	poisson_disk[38] = vec2(-0.688894, 0.007843);
-	poisson_disk[39] = vec2(0.464034, -0.188818);
-	poisson_disk[40] = vec2(-0.440840, 0.137486);
-	poisson_disk[41] = vec2(0.364483, 0.511704);
-	poisson_disk[42] = vec2(0.034028, 0.325968);
-	poisson_disk[43] = vec2(0.099094, -0.308023);
-	poisson_disk[44] = vec2(0.693960, -0.366253);
-	poisson_disk[45] = vec2(0.678884, -0.204688);
-	poisson_disk[46] = vec2(0.001801, 0.780328);
-	poisson_disk[47] = vec2(0.145177, -0.898984);
-	poisson_disk[48] = vec2(0.062655, -0.611866);
-	poisson_disk[49] = vec2(0.315226, -0.604297);
-	poisson_disk[50] = vec2(-0.780145, 0.486251);
-	poisson_disk[51] = vec2(-0.371868, 0.882138);
-	poisson_disk[52] = vec2(0.200476, 0.494430);
-	poisson_disk[53] = vec2(-0.494552, -0.711051);
-	poisson_disk[54] = vec2(0.612476, 0.705252);
-	poisson_disk[55] = vec2(-0.578845, -0.768792);
-	poisson_disk[56] = vec2(-0.772454, -0.090976);
-	poisson_disk[57] = vec2(0.504440, 0.372295);
-	poisson_disk[58] = vec2(0.155736, 0.065157);
-	poisson_disk[59] = vec2(0.391522, 0.849605);
-	poisson_disk[60] = vec2(-0.620106, -0.328104);
-	poisson_disk[61] = vec2(0.789239, -0.419965);
-	poisson_disk[62] = vec2(-0.545396, 0.538133);
-	poisson_disk[63] = vec2(-0.178564, -0.596057);
+	poisson_disk[0] = vec2(-0.613392f, 0.617481f);
+	poisson_disk[1] = vec2(0.170019f, -0.040254f);
+	poisson_disk[2] = vec2(-0.299417f, 0.791925f);
+	poisson_disk[3] = vec2(0.645680f, 0.493210f);
+	poisson_disk[4] = vec2(-0.651784f, 0.717887f);
+	poisson_disk[5] = vec2(0.421003f, 0.027070f);
+	poisson_disk[6] = vec2(-0.817194f, -0.271096f);
+	poisson_disk[7] = vec2(-0.705374f, -0.668203f);
+	poisson_disk[8] = vec2(0.977050f, -0.108615f);
+	poisson_disk[9] = vec2(0.063326f, 0.142369f);
+	poisson_disk[10] = vec2(0.203528f, 0.214331f);
+	poisson_disk[11] = vec2(-0.667531f, 0.326090f);
+	poisson_disk[12] = vec2(-0.098422f, -0.295755f);
+	poisson_disk[13] = vec2(-0.885922f, 0.215369f);
+	poisson_disk[14] = vec2(0.566637f, 0.605213f);
+	poisson_disk[15] = vec2(0.039766f, -0.396100f);
+	poisson_disk[16] = vec2(0.751946f, 0.453352f);
+	poisson_disk[17] = vec2(0.078707f, -0.715323f);
+	poisson_disk[18] = vec2(-0.075838f, -0.529344f);
+	poisson_disk[19] = vec2(0.724479f, -0.580798f);
+	poisson_disk[20] = vec2(0.222999f, -0.215125f);
+	poisson_disk[21] = vec2(-0.467574f, -0.405438f);
+	poisson_disk[22] = vec2(-0.248268f, -0.814753f);
+	poisson_disk[23] = vec2(0.354411f, -0.887570f);
+	poisson_disk[24] = vec2(0.175817f, 0.382366f);
+	poisson_disk[25] = vec2(0.487472f, -0.063082f);
+	poisson_disk[26] = vec2(-0.084078f, 0.898312f);
+	poisson_disk[27] = vec2(0.488876f, -0.783441f);
+	poisson_disk[28] = vec2(0.470016f, 0.217933f);
+	poisson_disk[29] = vec2(-0.696890f, -0.549791f);
+	poisson_disk[30] = vec2(-0.149693f, 0.605762f);
+	poisson_disk[31] = vec2(0.034211f, 0.979980f);
+	poisson_disk[32] = vec2(0.503098f, -0.308878f);
+	poisson_disk[33] = vec2(-0.016205f, -0.872921f);
+	poisson_disk[34] = vec2(0.385784f, -0.393902f);
+	poisson_disk[35] = vec2(-0.146886f, -0.859249f);
+	poisson_disk[36] = vec2(0.643361f, 0.164098f);
+	poisson_disk[37] = vec2(0.634388f, -0.049471f);
+	poisson_disk[38] = vec2(-0.688894f, 0.007843f);
+	poisson_disk[39] = vec2(0.464034f, -0.188818f);
+	poisson_disk[40] = vec2(-0.440840f, 0.137486f);
+	poisson_disk[41] = vec2(0.364483f, 0.511704f);
+	poisson_disk[42] = vec2(0.034028f, 0.325968f);
+	poisson_disk[43] = vec2(0.099094f, -0.308023f);
+	poisson_disk[44] = vec2(0.693960f, -0.366253f);
+	poisson_disk[45] = vec2(0.678884f, -0.204688f);
+	poisson_disk[46] = vec2(0.001801f, 0.780328f);
+	poisson_disk[47] = vec2(0.145177f, -0.898984f);
+	poisson_disk[48] = vec2(0.062655f, -0.611866f);
+	poisson_disk[49] = vec2(0.315226f, -0.604297f);
+	poisson_disk[50] = vec2(-0.780145f, 0.486251f);
+	poisson_disk[51] = vec2(-0.371868f, 0.882138f);
+	poisson_disk[52] = vec2(0.200476f, 0.494430f);
+	poisson_disk[53] = vec2(-0.494552f, -0.711051f);
+	poisson_disk[54] = vec2(0.612476f, 0.705252f);
+	poisson_disk[55] = vec2(-0.578845f, -0.768792f);
+	poisson_disk[56] = vec2(-0.772454f, -0.090976f);
+	poisson_disk[57] = vec2(0.504440f, 0.372295f);
+	poisson_disk[58] = vec2(0.155736f, 0.065157f);
+	poisson_disk[59] = vec2(0.391522f, 0.849605f);
+	poisson_disk[60] = vec2(-0.620106f, -0.328104f);
+	poisson_disk[61] = vec2(0.789239f, -0.419965f);
+	poisson_disk[62] = vec2(-0.545396f, 0.538133f);
+	poisson_disk[63] = vec2(-0.178564f, -0.596057f);
 }

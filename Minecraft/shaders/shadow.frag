@@ -53,7 +53,7 @@ float is_pixel_occluded(vec4 pixel, float bias){
 
 	for (int i=0;i<samples;i++){
 		int index = int(64.0*random(vec4(pixel_position.xyz, i)))%64;
-		closest_depth = texture2D(u_light_texture, proj_coords.xy + poisson(index)/2100.0).r;
+		closest_depth = texture2D(u_light_texture, proj_coords.xy + poisson(index)/5000.0).r;
 		visibility -= 1.0/samples * (1.0 - step(closest_depth, current_depth - bias));
 	}
 	return visibility;
@@ -103,7 +103,7 @@ void main()
 	// shadow
 	float bias = 0.001*tan(acos(cosTheta));
 	bias = clamp(bias, 0.0, 0.001);
-	float shadow = is_pixel_occluded(light_pixel_position, 0.001);
+	float shadow = is_pixel_occluded(light_pixel_position, 0.0001);
 	
 	// lambertian
 	vec4 lambertian = (ambiental + (1.0 - shadow) * diffuse) * texture_color; 

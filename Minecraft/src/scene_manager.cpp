@@ -111,7 +111,7 @@ void scene_manager::initialize(GLFWwindow *window) {
 		s->init();
 	}
 	
-	threads.push_back(thread(update_map, std::ref(program_is_running)));
+	//threads.push_back(thread(update_map, std::ref(program_is_running)));
 
     if (sceneList.size() > 0) {
         currentScene = 0;

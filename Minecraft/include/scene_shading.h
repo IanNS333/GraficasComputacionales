@@ -77,7 +77,11 @@ private:
 	void handle_rotation();
 	void handle_gravity();
 	void handle_raycasting();
+	void handle_add_block();
+	void handle_remove_block();
+	void add_block(int i, int j, int k, int type);
 	bool is_block_visible(int i, int j, int k);
+	void make_near_blocks_visible(int i, int j, int k);
 	void first_render();
 	void second_render();
 	void init_poisson();
