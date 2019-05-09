@@ -4,6 +4,7 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 #include "scene.h"
 #include "mat4.h"
@@ -11,6 +12,7 @@
 #include "vec3.h"
 #include "cgmath.h"
 #include "depth_buffer.h"
+#include "body.h"
 
 using cgmath::radians;
 using cgmath::mat4;
@@ -20,6 +22,7 @@ using std::vector;
 using std::forward_list;
 using std::thread;
 using std::atomic;
+using std::mutex;
 
 struct sheet_texture {
 	int x_up;
@@ -41,14 +44,12 @@ struct sheet_texture {
 		y_down(y_down){ }
 };
 
-class scene_shading : public scene
+class scene_minecraft : public scene
 {
 public:
 
-	~scene_shading();
-	scene_shading(GLFWwindow *window): scene(window){
-
-	}
+	~scene_minecraft();
+	scene_minecraft(GLFWwindow *window): scene(window){}
 	void init();
 	void awake();
 	void sleep();
@@ -67,7 +68,6 @@ private:
 	void compile_shaders();
 	void compile_light_shaders();
 	vec2 get_texture_coords(int x, int y);
-	//vector<vec2> cube_texture_coords(int id);
 	vector<vec3> cube_normal_vectors();
 	vector<vec3> cube_positions();
 	void generate_map();
@@ -88,6 +88,7 @@ private:
 	bool has_object(const vec3 &v);
 	bool is_outside(const vec3 &v);
 	vector<vec3> voxels(const vec3 &ray, const vec3& origin);
+
 	static const int MAP_SIZE = 1000;
 	static const int MAP_HEIGHT = 128;
 	static const int RENDER_DISTANCE = 200;
@@ -146,6 +147,8 @@ private:
 	vector<vec2> texture_down_coords;
 
 	vector<vec3> offsets;
+	mutex map_mutex;
+	
 
 	int coords_to_offset_index[MAP_SIZE + 1][MAP_SIZE + 1][MAP_HEIGHT + 1];
 
@@ -191,7 +194,13 @@ private:
 	int OCEAN_BIOME = 6;
 	int AUTUM_FOREST = 7;
 
-	vec3 camera_position = { 500.0f, 100.0f, 500.0f };
+	//vec3 camera_position = { 500.0f, 100.0f, 500.0f };
+	body camera{
+		{ 500.0f, 100.0f, 500.0f },
+		{ 0.9f, 1.9f, 0.9f },
+		{ 0.0f, 0.0f, 0.0f }
+	};
+
 	vec3 light_camera_position = vec3::normalize({ 500.0f, 100.0f, 500.0f })*1000.0f;
 
 	mat4 proyection_matrix = mat4::transpose({
@@ -208,9 +217,16 @@ private:
 		{0.0f, 0.0f, 0.0f, 1.0f},
 	});*/
 	
+	/*mat4 light_proyection_matrix = mat4::transpose({
+		{2.0f / (10.0f + 10.0f), 0.0f, 0.0f, 0.0f},
+		{0.0f, 2.0f / (10.0f + 10.0f), 0.0f, -(10.0f - 10.0f) / (200.0f + 100.0f)},
+		{0.0f, 0.0f, -2.0f / (1000.0f), -(1000.0f) / (1000.0f)},
+		{0.0f, 0.0f, 0.0f, 1.0f},
+	});*/
+
 	mat4 light_proyection_matrix = mat4::transpose({
 		{2.0f / (RENDER_DISTANCE + RENDER_DISTANCE), 0.0f, 0.0f, 0.0f},
-		{0.0f, 2.0f / (200.0f + 100.0f), 0.0f, -(250.0f - 100.0f)/(250.0f + 100.0f)},
+		{0.0f, 2.0f / (200.0f + 100.0f), 0.0f, -(200.0f - 100.0f)/(200.0f + 100.0f)},
 		{0.0f, 0.0f, -2.0f / (1000.0f), - (1000.0f) / (1000.0f)},
 		{0.0f, 0.0f, 0.0f, 1.0f},
 	});

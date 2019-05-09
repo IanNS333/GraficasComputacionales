@@ -1,10 +1,11 @@
-#include "scene_shading.h"
+#include "scene_minecraft.h"
 
 #include <GL/freeglut.h>
 #include <algorithm>
 #include <iostream>
 #include <forward_list>
 #include <atomic>
+#include <mutex>
 #include <cmath>
 
 #include "cgmath.h"
@@ -13,6 +14,7 @@
 #include "perlin_noise.h"
 #include "time_utils.h"
 #include "vec2.h"
+#include "vec3i.h"
 #include "vec3.h"
 #include "vec3d.h"
 #include "vec4.h"
@@ -26,6 +28,7 @@ using cgmath::rotate_around;
 using cgmath::rotation_matrix;
 using cgmath::translation_matrix;
 using cgmath::vec2;
+using cgmath::vec3i;
 using cgmath::vec3;
 using cgmath::vec3d;
 using cgmath::vec4;
@@ -34,6 +37,7 @@ using utils::randf;
 using std::max;
 using std::min;
 using std::atomic;
+using std::mutex;
 using std::truncf;
 
 float sign(float val) {
@@ -49,13 +53,13 @@ float abs_ceil(float x)
 	return x < 0 ? floor(x) : ceil(x);
 }
 
-scene_shading::~scene_shading() {
+scene_minecraft::~scene_minecraft() {
     glDeleteProgram(shader_program);
     glDeleteProgram(light_shader_program);
     glDeleteTextures(1, &textureId);
 }
 
-void scene_shading::compile_shaders() {
+void scene_minecraft::compile_shaders() {
     shader_program = generateShaderProgram(
         {
             {"shaders/shadow.vert", GL_VERTEX_SHADER},
@@ -83,7 +87,7 @@ void scene_shading::compile_shaders() {
 
     light_position_location = glGetUniformLocation(shader_program, "u_light_position");
     light_color_location = glGetUniformLocation(shader_program, "u_light_color");
-    camera_position_location = glGetUniformLocation(shader_program, "u_camera_position");
+    camera_position_location = glGetUniformLocation(shader_program, "u_camera.position");
 
 	shadow_light_mvp_location = glGetUniformLocation(shader_program, "u_light_mvp_matrix");
 
@@ -95,7 +99,7 @@ void scene_shading::compile_shaders() {
     glUseProgram(0);
 }
 
-void scene_shading::compile_light_shaders() {
+void scene_minecraft::compile_light_shaders() {
 	light_shader_program = generateShaderProgram({
 		{"shaders/depth.vert", GL_VERTEX_SHADER},
 		{"shaders/depth.frag", GL_FRAGMENT_SHADER},
@@ -105,13 +109,13 @@ void scene_shading::compile_light_shaders() {
 	light_mvp_location = glGetUniformLocation(light_shader_program, "u_light_mvp_matrix");
 }
 
-vec2 scene_shading::get_texture_coords(int x, int y) {
+vec2 scene_minecraft::get_texture_coords(int x, int y) {
 	x--;
 	y--;
 	return vec2(x / 16.0f, y / 23.0f );
 }
 
-//vector<vec2> scene_shading::get_texture_coords(int x, int y) {
+//vector<vec2> scene_minecraft::get_texture_coords(int x, int y) {
     
 	/*x--;
     y--;
@@ -129,7 +133,7 @@ vec2 scene_shading::get_texture_coords(int x, int y) {
     return texture_coords;*/
 //}
 
-vector<vec3> scene_shading::cube_positions() {
+vector<vec3> scene_minecraft::cube_positions() {
     vec3 back_lower_left = {-0.5f, -0.5f, -0.5f};
     vec3 back_lower_right = {0.5f, -0.5f, -0.5f};
     vec3 back_upper_right = {0.5f, 0.5f, -0.5f};
@@ -174,7 +178,7 @@ vector<vec3> scene_shading::cube_positions() {
     return positions;
 }
 
-//vector<vec2> scene_shading::cube_texture_coords(int id) {
+//vector<vec2> scene_minecraft::cube_texture_coords(int id) {
 //    vector<vec2> texture_coords_up =
 //        get_texture_coords(textures[id].x_up, textures[id].y_up);
 //    vector<vec2> texture_coords_side =
@@ -216,7 +220,7 @@ vector<vec3> scene_shading::cube_positions() {
 //    return texture_coords;
 //}
 
-vector<vec3> scene_shading::cube_normal_vectors() {
+vector<vec3> scene_minecraft::cube_normal_vectors() {
     vec3 front = {0.0f, 0.0f, 1.0f};
     vec3 back = {0.0f, 0.0f, -1.0f};
     vec3 up = {0.0f, 1.0f, 0.0f};
@@ -232,7 +236,7 @@ vector<vec3> scene_shading::cube_normal_vectors() {
     return normal_vectors;
 }
 
-bool scene_shading::is_block_visible(int i, int j, int k) {
+bool scene_minecraft::is_block_visible(int i, int j, int k) {
     
 	if (k == 0) {
 		return true;
@@ -266,7 +270,7 @@ bool scene_shading::is_block_visible(int i, int j, int k) {
     return false;
 }
 
-void scene_shading::make_near_blocks_visible(int i, int j, int k) {
+void scene_minecraft::make_near_blocks_visible(int i, int j, int k) {
 	int a_start = i == 0 ? 0 : -1;
 	int a_end = i == MAP_SIZE ? 0 : 1;
 
@@ -293,7 +297,8 @@ void scene_shading::make_near_blocks_visible(int i, int j, int k) {
 	}
 }
 
-void scene_shading::add_block(int i, int j, int k, int type) {
+void scene_minecraft::add_block(int i, int j, int k, int type) {
+	map_mutex.lock();
 	blocks[i][j][k] = type;
 
 	texture_up_coords.push_back(get_texture_coords(textures[type - 1].x_up, textures[type - 1].y_up));
@@ -301,10 +306,12 @@ void scene_shading::add_block(int i, int j, int k, int type) {
 	texture_down_coords.push_back(get_texture_coords(textures[type - 1].x_down, textures[type - 1].y_down));
 
 	coords_to_offset_index[i][j][k] = offsets.size();
+	//offsets.push_back(vec3(i, k, j));
 	offsets.push_back(vec3(i + 0.5f, k + 0.5f, j + 0.5f));
+	map_mutex.unlock();
 }
 
-void scene_shading::generate_tree(int i, int j, int k, int biome) {
+void scene_minecraft::generate_tree(int i, int j, int k, int biome) {
 	int leaves = 0;
 	int wood = 0;
 	if (biome == SNOW_BIOME) {
@@ -335,10 +342,12 @@ void scene_shading::generate_tree(int i, int j, int k, int biome) {
 
 	int height = int(randf() * 3.0f + 4.0f);
 
+	map_mutex.lock();
 	for (int h = k; h < k+height; h++) {
 		blocks[i][j][h] = wood;
 	}
 	blocks[i][j][k + height] = leaves;
+	map_mutex.unlock();
 
 	int width = height;
 	if (width % 2 == 0) {
@@ -354,14 +363,16 @@ void scene_shading::generate_tree(int i, int j, int k, int biome) {
 					continue;
 				}
 				if (randf() < 0.7f && blocks[i+a][j+b][k+h+height] == 0) {
+					map_mutex.lock();
 					blocks[i+a][j+b][k+h+height] = leaves;
+					map_mutex.unlock();
 				}
 			}
 		}
 	}
 }
 
-int scene_shading::get_biome(float map_height, float biome_height) {
+int scene_minecraft::get_biome(float map_height, float biome_height) {
 	if (map_height > 0.7) return SNOW_BIOME;
 	if (map_height > 0.45) {
 		if (biome_height < 0.3) return PLAINS_BIOME;
@@ -373,7 +384,7 @@ int scene_shading::get_biome(float map_height, float biome_height) {
 	return OCEAN_BIOME;
 }
 
-void scene_shading::generate_map() {
+void scene_minecraft::generate_map() {
 
 	const int MAP_PERLIN_SIZE = 10;
 	const int BIOME_PERLIN_SIZE = 5;
@@ -386,7 +397,9 @@ void scene_shading::generate_map() {
     for (int i = 0; i <= MAP_SIZE; i++) {
         for (int j = 0; j <= MAP_SIZE; j++) {
             for (int k = 0; k <= MAP_HEIGHT; k++) {
+				map_mutex.lock();
                 blocks[i][j][k] = 0;
+				map_mutex.unlock();
             }
         }
     }
@@ -427,6 +440,7 @@ void scene_shading::generate_map() {
 				dirt = DIRT_TYPE;
 			}
 
+			map_mutex.lock();
             for (int k = height; k >= 0; k--) {
 				 if (blocks[i][j][k + 1] == 0) {
                     blocks[i][j][k] = grass;
@@ -442,6 +456,7 @@ void scene_shading::generate_map() {
 					blocks[i][j][k] = WATER_TYPE;
 				}
 			}
+			map_mutex.unlock();
 			if (randf() < 0.01) {
 				generate_tree(i, j,height + 1, biome);
 			}
@@ -458,16 +473,16 @@ void scene_shading::generate_map() {
 	texture_down_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
 
 
-	int start_x = max(int(camera_position.x - RENDER_DISTANCE), 0);
-	int end_x = min(int(camera_position.x + RENDER_DISTANCE), MAP_SIZE);
-	int start_z = max(int(camera_position.z - RENDER_DISTANCE), 0);
-	int end_z = min(int(camera_position.z + RENDER_DISTANCE), MAP_SIZE);
+	int start_x = max(int(camera.position.x - RENDER_DISTANCE), 0);
+	int end_x = min(int(camera.position.x + RENDER_DISTANCE), MAP_SIZE);
+	int start_z = max(int(camera.position.z - RENDER_DISTANCE), 0);
+	int end_z = min(int(camera.position.z + RENDER_DISTANCE), MAP_SIZE);
 
 	for (int k = 0; k <= MAP_HEIGHT; k++) {
 		for (int i = start_x; i <= end_x; i++) {
 			for (int j = start_z; j <= end_z; j++) {
 				coords_to_offset_index[i][j][k] = 0;
-				bool in_range = (vec3(i, k, j) - camera_position).magnitude() < RENDER_DISTANCE;
+				bool in_range = (vec3(i, k, j) - camera.position).magnitude() < RENDER_DISTANCE;
 				if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
 					add_block(i,j,k, blocks[i][j][k]);
 				}
@@ -476,7 +491,7 @@ void scene_shading::generate_map() {
 	}
 }
 
-void scene_shading::init() {
+void scene_minecraft::init() {
 
 	init_poisson();
 
@@ -535,6 +550,7 @@ void scene_shading::init() {
 
     glGenVertexArrays(1, &vao);
 
+	map_mutex.lock();
     indexIBO = generateIBO(vao, indices, GL_STATIC_DRAW);
     positionsVBO = generateVBO(vao, 0, positions, 3, GL_FLOAT, GL_STATIC_DRAW);
     offsets_coordsVBO = generateInstancedVBO(vao, 1, offsets, 3, GL_FLOAT, GL_STATIC_DRAW, 1);
@@ -547,6 +563,7 @@ void scene_shading::init() {
 	texture_face_VBO = generateVBO(vao, 6, faces, 1, GL_FLOAT, GL_STATIC_DRAW);
 	texture_offsets_VBO = generateVBO(vao, 7, texture_offsets, 2, GL_FLOAT, GL_STATIC_DRAW);
 
+	map_mutex.unlock();
 
     textureId = generateTexture("assets/spritesheet2.png");
 
@@ -556,7 +573,7 @@ void scene_shading::init() {
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
-void scene_shading::awake() {
+void scene_minecraft::awake() {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	double x, y;
 	glfwGetCursorPos(window, &x, &y);
@@ -565,12 +582,12 @@ void scene_shading::awake() {
 	glClearColor(208.0f / 255.0f, 183.0f / 255.0f, 249.0f / 255.0f, 1.0f);
 }
 
-void scene_shading::sleep() {
+void scene_minecraft::sleep() {
     glClearColor(1.0f, 1.0f, 0.5f, 1.0f);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
-void scene_shading::first_render() {
+void scene_minecraft::first_render() {
 	buffer.bind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glUseProgram(light_shader_program);
@@ -584,7 +601,7 @@ void scene_shading::first_render() {
 	buffer.unbind();
 }
 
-void scene_shading::second_render() {
+void scene_minecraft::second_render() {
 	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glUseProgram(shader_program);
@@ -602,12 +619,12 @@ void scene_shading::second_render() {
 		&(normal_matrix[0][0]));
 	
 	glUniform3fv(camera_position_location, 1,
-		&(camera_position[0]));
+		&(camera.position[0]));
 
 	glUniform3f(light_position_location, 10.0f, 20.0f, 10.0f);
 
 	mat4 view_matrix =
-		lookAt(camera_position, camera_position + forward, { 0.0f, 1.0f, 0.0f });
+		lookAt(camera.position, camera.position + forward, { 0.0f, 1.0f, 0.0f });
 	glUniformMatrix4fv(mvp_matrix_location, 1, GL_FALSE, &((proyection_matrix*view_matrix)[0][0]));
 	
 	glUniformMatrix4fv(shadow_light_mvp_location, 1, GL_FALSE, &((light_proyection_matrix * light_view_matrix)[0][0]));
@@ -624,24 +641,7 @@ void scene_shading::second_render() {
 	glUseProgram(0);
 }
 
-//bool is_inside(const vec3& point, const vec3 &box) {
-//	float min_x = box.x - 0.5f;
-//	float min_y = box.y - 0.5f;
-//	float min_z = box.z - 0.5f;
-//	
-//	float max_x = box.x + 0.5f;
-//	float max_y = box.y + 0.5f;
-//	float max_z = box.z + 0.5f;
-//
-//	if (min_x < point.x && point.x  < max_x &&
-//		min_y < point.y && point.y  < max_y &&
-//		min_z < point.z && point.z  < max_z){
-//		return true;
-//	}
-//	return false;
-//}
-
-bool scene_shading::has_object(const vec3& v) {
+bool scene_minecraft::has_object(const vec3& v) {
 	if (is_outside(v)) {
 		return false;
 	}
@@ -652,7 +652,7 @@ bool scene_shading::has_object(const vec3& v) {
 	return blocks[x][z][y] != 0;
 }
 
-bool scene_shading::is_outside(const vec3& v) {
+bool scene_minecraft::is_outside(const vec3& v) {
 	if (v.x < 0 || MAP_SIZE < v.x ||
 		v.y < 0 || MAP_HEIGHT < v.y ||
 		v.z < 0 || MAP_SIZE < v.z) {
@@ -661,104 +661,7 @@ bool scene_shading::is_outside(const vec3& v) {
 	return false;
 }
 
-//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
-	//vector<vec3> result;
-	//if (!is_outside(origin)) {
-	//	result.push_back(origin);
-	//}
-
-	//vec3 position = origin;
-	//vec3 step = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
-	//vec3 t;
-	//vec3 direction = vec3::normalize(ray);
-	//vec3 current_ray;
-	//vec3 delta(1.0f, 1.0f, 1.0f);
-
-	//for (int i = 0; i < 3; i++) {
-	//	if (step[i] > 0) {
-	//		t[i] = abs((truncf(position[i] + step[i]) - position[i])/ direction[i]);
-	//	}
-	//	else if (step[i] < 0) {
-	//		t[i] = abs((position[i] - abs_ceil(position[i] + step[i]))/ direction[i]);
-	//	}
-	//}
-	//int cont = 20;
-	//while (cont--) {
-	//	for (int k = 0; k < 3; k++) {
-	//		float t_min = t[0];
-	//		int t_min_axis = 0;
-	//		for (int i = 0; i < 3; i++) {
-	//			if (t[i] < t_min) {
-	//				t_min = t[i];
-	//				t_min_axis = i;
-	//			}
-	//		}
-
-	//		vec3 current_ray = t_min*direction;
-
-	//		if(current_ray.magnitude() > 10.0f) {
-	//			return result;
-	//		}
-
-	//		position[t_min_axis] += step[t_min_axis];
-	//		t[t_min_axis] += delta[t_min_axis];
-	//		
-	//		if (!is_outside(position)) {
-	//			result.push_back(position);
-	//		}
-	//	}
-	//}
-
-	//return result;
-//}
-
-//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
-//	vector<vec3> result;
-//	
-//	if (!is_outside(origin)) {
-//		result.push_back(origin);
-//	}
-//
-//	vec3 t_max, t_delta;
-//	vec3 current_voxel;
-//	
-//	vec3 start = origin;
-//	vec3 end = origin + ray;
-//
-//	vec3 delta = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
-//
-//	for (int i = 0; i < 3; i++) {
-//		if (ray[i] == 0.0f){
-//			t_delta[i] = 100000.0f;
-//		}
-//		else {
-//			t_delta[i] = delta[i] / (ray[i]);
-//		}
-//		t_max[i] = t_delta[i] * (1.0f - abs(modf(start[i], &current_voxel[i])));
-//	}
-//
-//	while (true) {
-//		float t_min = t_max[0];
-//		int t_min_dimension = 0;
-//		for (int i = 1; i < 3; i++) {
-//			if (t_max[i] < t_min) {
-//				t_min = t_max[i];
-//				t_min_dimension = i;
-//			}
-//
-//		}
-//		current_voxel[t_min_dimension] += delta[t_min_dimension];
-//		t_max[t_min_dimension] += t_delta[t_min_dimension];
-//
-//		if(t_max.x > 1 && t_max.y > 1 && t_max.z > 1) break;
-//
-//		result.push_back(current_voxel);
-//	}
-//
-//	return result;
-//}
-
-vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
+vector<vec3> scene_minecraft::voxels(const vec3& ray, const vec3& origin) {
 	vector<vec3> result;
 
 	if (!is_outside(origin)) {
@@ -802,7 +705,6 @@ vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
 		current_voxel[t_min_dimension] += step[t_min_dimension];
 		t_max[t_min_dimension] += t_delta[t_min_dimension];
 
-		//if (t_max.x > 1  && t_max.y > 1 && t_max.z > 1) break;
 		if ((current_voxel - origin).magnitude() > ray.magnitude()) break;
 
 		result.push_back(current_voxel);
@@ -811,64 +713,7 @@ vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
 	return result;
 }
 
-//vector<vec3> scene_shading::voxels(const vec3& ray, const vec3& origin) {
-//	vector<vec3> result;
-//
-//	if (!is_outside(origin)) {
-//		result.push_back(origin);
-//	}
-//
-//	vec3 t_max, t_delta;
-//	vec3 current_voxel = origin;
-//	vec3 end = origin + ray;
-//	end = vec3(int(end.x), int(end.y), int(end.z));
-//
-//	vec3 step = vec3(sign(ray.x), sign(ray.y), sign(ray.z));
-//
-//	float border;
-//	for (int i = 0; i < 3; i++) {
-//		if (step[i] > 0.0f) {
-//			border = floor(origin[i] + 1.0f);
-//		}
-//		else {
-//			border = ceil(origin[i] - 1.0f);
-//		}
-//		if (AreEqual(ray[i], 0.0f)) {
-//			t_max[i] = 100000.0f;
-//			t_delta[i] = 100000.0f;
-//		}
-//		else {
-//			t_max[i] = (border - origin[i]) / ray[i];
-//			t_delta[i] = step[i] / ray[i];
-//		}
-//	}
-//
-//	vec3 current_voxel_int;
-//	while (true) {
-//		float t_min = t_max[0];
-//		int t_min_dimension = 0;
-//		for (int i = 1; i < 3; i++) {
-//			if (t_max[i] < t_min) {
-//				t_min = t_max[i];
-//				t_min_dimension = i;
-//			}
-//		}
-//		current_voxel = origin + (t_min * ray);
-//		t_max[t_min_dimension] += t_delta[t_min_dimension];
-//
-//		if (t_max.x > 1 && t_max.y > 1 && t_max.z > 1) break;
-//		//current_voxel_int = vec3(int(current_voxel.x), int(current_voxel.y), int(current_voxel.z));
-//		//if (current_voxel == end) {
-//		//	break;
-//		//}
-//
-//		result.push_back(current_voxel);
-//	}
-//
-//	return result;
-//}
-
-void scene_shading::update_map(std::atomic<bool>& program_is_running) {
+void scene_minecraft::update_map(std::atomic<bool>& program_is_running) {
 	
 	vector<vec3> m_offsets;
 	vector<vec2> m_texture_up_coords;
@@ -892,15 +737,15 @@ void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 		m_texture_side_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
 		m_texture_down_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
 
-		start_x = max(int(camera_position.x - RENDER_DISTANCE), 0);
-		end_x = min(int(camera_position.x + RENDER_DISTANCE), MAP_SIZE);
-		start_z = max(int(camera_position.z - RENDER_DISTANCE), 0);
-		end_z = min(int(camera_position.z + RENDER_DISTANCE), MAP_SIZE);
+		start_x = max(int(camera.position.x - RENDER_DISTANCE), 0);
+		end_x = min(int(camera.position.x + RENDER_DISTANCE), MAP_SIZE);
+		start_z = max(int(camera.position.z - RENDER_DISTANCE), 0);
+		end_z = min(int(camera.position.z + RENDER_DISTANCE), MAP_SIZE);
 		
 		for (k = 0; k <= MAP_HEIGHT; k++) {
 			for (i = start_x; i <= end_x; i++) {
 				for (j = start_z; j <= end_z; j++) {
-					in_range = (vec3(i, 0.0f, j) - vec3(camera_position.x, 0.0f, camera_position.z)).magnitude() < RENDER_DISTANCE;
+					in_range = (vec3(i, 0.0f, j) - vec3(camera.position.x, 0.0f, camera.position.z)).magnitude() < RENDER_DISTANCE;
 
 					coords_to_offset_index[i][j][k] = 0;
 					if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
@@ -911,6 +756,7 @@ void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 						m_texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
 
 						coords_to_offset_index[i][j][k] = m_offsets.size();
+						//m_offsets.push_back(vec3(i, k, j));
 						m_offsets.push_back(vec3(i + 0.5f, k + 0.5f, j + 0.5f));
 					}
 				}
@@ -919,27 +765,31 @@ void scene_shading::update_map(std::atomic<bool>& program_is_running) {
 
 		std::cout << "updated" << std::endl;
 
+		map_mutex.lock();
 		offsets = m_offsets;
 		texture_up_coords = m_texture_up_coords;
 		texture_side_coords = m_texture_side_coords;
 		texture_down_coords = m_texture_down_coords;
+		map_mutex.unlock();
 	}
 }
 
-void scene_shading::mainLoop() {
+void scene_minecraft::mainLoop() {
     handle_movement();
     handle_rotation();
     handle_gravity();
 	handle_raycasting();
 
-	light_view_matrix = lookAt(light_camera_position, { camera_position.x, 0.0f, camera_position.z }, { 0.0f, 1.0f, 0.0f });
+	light_view_matrix = lookAt(light_camera_position, { camera.position.x, 0.0f, camera.position.z }, { 0.0f, 1.0f, 0.0f });
 
-    glBindVertexArray(vao);
+	glBindVertexArray(vao);
 
+	map_mutex.lock();
 	updateInstancedVBO(vao, offsets_coordsVBO, 1, offsets, 3, GL_FLOAT, GL_STATIC_DRAW, 1);
 	updateInstancedVBO(vao, texture_coords_up_VBO, 3, texture_up_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
 	updateInstancedVBO(vao, texture_coords_side_VBO, 4, texture_side_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
 	updateInstancedVBO(vao, texture_coords_down_VBO, 5, texture_down_coords, 2, GL_FLOAT, GL_STATIC_DRAW, 1);
+	map_mutex.unlock();
 
 	first_render();
 	second_render();
@@ -947,7 +797,7 @@ void scene_shading::mainLoop() {
     glBindVertexArray(0);
 }
 
-void scene_shading::resize(int width, int height) {
+void scene_minecraft::resize(int width, int height) {
     this->width = width;
     this->height = height;
 
@@ -969,11 +819,95 @@ void scene_shading::resize(int width, int height) {
     this->height = height;
 }
 
-void scene_shading::handle_gravity() {
-    camera_position.y += 10.0f * up_input * time::delta_time().count();
+void scene_minecraft::handle_gravity() {
+
+	float delta_time = time::delta_time().count();
+
+	camera.velocity += vec3(0.0f, -10.0f, 0.0f) * delta_time;
+
+	short block = 0;
+	vec3i next_block;
+
+	body new_camera = camera;
+	bool collision;
+	
+	vector<vec3i> collision_blocks;
+	new_camera.position = camera.position - (camera.dimensions / 2.0f) - vec3(0.0f, 0.75f, 0.0f);
+
+	next_block = vec3i(new_camera.position);
+
+	collision_blocks.push_back({ next_block.x - 1, next_block.y, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y, next_block.z });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y, next_block.z });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y, next_block.z + 1 });
+
+
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 1, next_block.z });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 1, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y + 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y + 1, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 1, next_block.z });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 1, next_block.z + 1 });
+
+	collision_blocks.push_back({ next_block.x - 1, next_block.y - 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y - 1, next_block.z });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y - 1, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y - 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y - 1, next_block.z });
+	collision_blocks.push_back({ next_block.x  , next_block.y - 1, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y - 1, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y - 1, next_block.z });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y - 1, next_block.z + 1 });
+
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z });
+	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z });
+	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z + 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z - 1 });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z });
+	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z + 1 });
+
+	for (int i = 0; i < 3; i++) {
+		if (new_camera.velocity[i] == 0.0f) {
+			continue;
+		}
+		new_camera.position = camera.position - (camera.dimensions/2.0f) - vec3(0.0f, 0.75f, 0.0f);
+		new_camera.position[i] = new_camera.position[i] + (camera.velocity[i] * delta_time);
+
+		for (auto &collision_block : collision_blocks) {
+			block = blocks[collision_block.x][collision_block.z][collision_block.y];
+			if (block != 0 && block != WATER_TYPE) {
+				collision = body::check_collision(new_camera, body(
+					collision_block,
+					{ 1.0f, 1.0f, 1.0f },
+					{ 0.0f, 0.0f, 0.0f }
+				));
+				if (collision) {
+					camera.velocity[i] = 0;
+					if (i == 1 && up_input) {
+						camera.velocity.y = 5.0f;
+					}
+				}
+			}
+		}
+	}
+
+
+	camera.position += camera.velocity * delta_time;
+
+	light_camera_position.x += camera.velocity.x * delta_time;
+	light_camera_position.z += camera.velocity.z * delta_time;
 }
 
-void scene_shading::handle_rotation() {
+void scene_minecraft::handle_rotation() {
     float delta_time = time::delta_time().count();
 
 	yaw_input = delta_x;
@@ -1013,36 +947,42 @@ void scene_shading::handle_rotation() {
     upward = vec3::normalize(vec3::cross(right, forward));
 }
 
-void scene_shading::handle_movement() {
-    float delta_time = time::delta_time().count();
+void scene_minecraft::handle_movement() {
 
     if (horizontal_input == 0 && vertical_input == 0 ) {
+		camera.velocity.x *= 0.1;
+		camera.velocity.z *= 0.1;
         return;
     }
 
-    float speed = 10.0f * delta_time;
+    float speed = 5.0f;
     vec2 movement =
         speed * vec2::normalize(vec2(float(horizontal_input), float(vertical_input)));
 
 	vec3 front = vec3::normalize(vec3::cross({ 0.0f, 1.0f, 0.0f }, right));
 
-	camera_position.x += (right * movement.x).x + (front * movement.y).x;
-	camera_position.z += (right * movement.x).z + (front * movement.y).z;
-
-	light_camera_position.x += (right * movement.x).x + (front * movement.y).x;
-	light_camera_position.z += (right * movement.x).z + (front * movement.y).z;
+	camera.velocity.x = (right * movement.x).x + (front * movement.y).x;
+	camera.velocity.z = (right * movement.x).z + (front * movement.y).z;
+	//camera.position.x += (right * movement.x).x + (front * movement.y).x;
+	//camera.position.z += (right * movement.x).z + (front * movement.y).z;
 }
 
-void scene_shading::handle_add_block() {
-	vector<vec3> _voxels = voxels(forward * 10.0f, camera_position);
+void scene_minecraft::handle_add_block() {
+	vector<vec3> _voxels = voxels(forward * 10.0f, camera.position);
 	vec3 prev_voxel;
 	for (auto &voxel : _voxels) {
 		if (has_object(voxel)) {
 			int x = int(prev_voxel.x);
 			int y = int(prev_voxel.y);
 			int z = int(prev_voxel.z);
+			
+			vec3i current_position = camera.position;
+			if (x != current_position.x ||
+				(y != current_position.y || y != current_position.y - 1) ||
+				z != current_position.z) {
 
-			add_block(x, z, y, WOOD_TYPE);
+				add_block(x, z, y, WOOD_TYPE);
+			}
 			return;
 		}
 		else {
@@ -1051,8 +991,8 @@ void scene_shading::handle_add_block() {
 	}
 }
 
-void scene_shading::handle_remove_block() {
-	vector<vec3> _voxels = voxels(forward * 10.0f, camera_position);
+void scene_minecraft::handle_remove_block() {
+	vector<vec3> _voxels = voxels(forward * 10.0f, camera.position);
 	for (auto &voxel : _voxels) {
 		if (has_object(voxel)) {
 			int x = int(voxel.x);
@@ -1061,6 +1001,7 @@ void scene_shading::handle_remove_block() {
 
 			make_near_blocks_visible(x, z, y);
 
+			map_mutex.lock();
 			blocks[x][z][y] = 0;
 
 			int nx = int(offsets[offsets.size() - 1].x);
@@ -1084,13 +1025,14 @@ void scene_shading::handle_remove_block() {
 			texture_down_coords.pop_back();
 
 
+			map_mutex.unlock();
 
 			return;
 		}
 	}
 }
 
-void scene_shading::handle_raycasting() {
+void scene_minecraft::handle_raycasting() {
 
 	if (mouse_input == 0) {
 		return;
@@ -1105,7 +1047,7 @@ void scene_shading::handle_raycasting() {
 	mouse_input = 0;
 }
 
-void scene_shading::keysDown(int key) {
+void scene_minecraft::keysDown(int key) {
     if (key == GLFW_KEY_C) {
         compile_shaders();
         compile_light_shaders();
@@ -1122,11 +1064,8 @@ void scene_shading::keysDown(int key) {
     if (key == GLFW_KEY_D) {
         horizontal_input = 1;
     }
-    if (key == GLFW_KEY_Z) {
+    if (key == GLFW_KEY_SPACE) {
         up_input = 1;
-    }
-    if (key == GLFW_KEY_X) {
-        up_input = -1;
     }
     /*if (key == GLFW_KEY_UP) {
         pitch_input = -1;
@@ -1142,7 +1081,7 @@ void scene_shading::keysDown(int key) {
     }*/
 }
 
-void scene_shading::keysUp(int key) {
+void scene_minecraft::keysUp(int key) {
     if (key == GLFW_KEY_W && vertical_input == 1) {
         vertical_input = 0;
     }
@@ -1155,10 +1094,7 @@ void scene_shading::keysUp(int key) {
     if (key == GLFW_KEY_D && horizontal_input == 1) {
         horizontal_input = 0;
     }
-    if (key == GLFW_KEY_Z && up_input == 1) {
-        up_input = 0;
-    }
-    if (key == GLFW_KEY_X && up_input == -1) {
+    if (key == GLFW_KEY_SPACE && up_input == 1) {
         up_input = 0;
     }
     if (key == GLFW_KEY_LEFT_CONTROL) {
@@ -1176,7 +1112,7 @@ void scene_shading::keysUp(int key) {
     }
 }
 
-void scene_shading::passiveMotion(float x, float y) {
+void scene_minecraft::passiveMotion(float x, float y) {
 	if (!capture_mouse) {
 		return;
 	}
@@ -1186,7 +1122,7 @@ void scene_shading::passiveMotion(float x, float y) {
 	mouse_y = y;
 }
 
-void scene_shading::mouseButton(int button, int action) {
+void scene_minecraft::mouseButton(int button, int action) {
 	if (action == GLFW_PRESS) {
 		if (button == GLFW_MOUSE_BUTTON_LEFT) {
 			std::cout << "left clicked!" << std::endl;
@@ -1199,7 +1135,7 @@ void scene_shading::mouseButton(int button, int action) {
 	}
 }
 
-void scene_shading::init_poisson() {
+void scene_minecraft::init_poisson() {
 	poisson_disk[0] = vec2(-0.613392f, 0.617481f);
 	poisson_disk[1] = vec2(0.170019f, -0.040254f);
 	poisson_disk[2] = vec2(-0.299417f, 0.791925f);

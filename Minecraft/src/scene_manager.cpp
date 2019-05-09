@@ -5,7 +5,7 @@
 #include <IL/il.h>
 
 #include "scene.h"
-#include "scene_shading.h"
+#include "scene_minecraft.h"
 #include "time_utils.h"
 
 std::vector<std::unique_ptr<scene>> scene_manager::sceneList;
@@ -94,7 +94,7 @@ void scene_manager::prev() {
 void update_map(std::atomic<bool>& program_is_running) {
 	while (program_is_running)
 	{
-		(reinterpret_cast<scene_shading *>(scene_manager::sceneList[0].get()))->update_map(program_is_running);
+		(reinterpret_cast<scene_minecraft *>(scene_manager::sceneList[0].get()))->update_map(program_is_running);
 	}
 }
 
@@ -103,7 +103,7 @@ void scene_manager::initialize(GLFWwindow *window) {
     // std::unique_ptr<scene> somescene(new scene_project);
     // sceneList.push_back(std::move(somescene));
 
-    std::unique_ptr<scene_shading> scene1(new scene_shading(window));
+    std::unique_ptr<scene_minecraft> scene1(new scene_minecraft(window));
 	
     sceneList.push_back(std::move(scene1));
 
@@ -111,7 +111,8 @@ void scene_manager::initialize(GLFWwindow *window) {
 		s->init();
 	}
 	
-	//threads.push_back(thread(update_map, std::ref(program_is_running)));
+	time::tick();
+	threads.push_back(thread(update_map, std::ref(program_is_running)));
 
     if (sceneList.size() > 0) {
         currentScene = 0;

@@ -39,9 +39,9 @@ void main()
 
 	vec3 phong = (ambiental + diffuse + specular) * texture_color; 
 	
-	float camera_facing_percentage = dot(normal_vector, view_vector);
+//	float camera_facing_percentage = dot(normal_vector, view_vector);
 	
-	FragColor = vec4(phong, 1.0) + (vec4(0.0, 0.0, 1.0, 1.0) *(pow(1 - camera_facing_percentage, 2)));
+	FragColor = vec4(phong, 1.0);
 	
 
 	// phong

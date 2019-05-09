@@ -8,6 +8,7 @@ using std::ostream;
 namespace cgmath {
 
 class vec4;
+class vec3i;
 
 class vec3 {
 public:
@@ -15,6 +16,7 @@ public:
 	vec3();
 	vec3(float x, float y, float z);
 	vec3(const vec4 &v);
+	vec3(const vec3i &v);
 
 	float& operator[](int i);
 	const float& operator[](int i) const;

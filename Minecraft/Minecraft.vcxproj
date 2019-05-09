@@ -92,12 +92,13 @@ xcopy "$(ProjectDir)assets" "$(ProjectDir)..\bin\Minecraft\assets\" /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\body.cpp" />
     <ClCompile Include="src\depth_buffer.cpp" />
     <ClCompile Include="src\glad.c" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\scene.cpp" />
     <ClCompile Include="src\scene_manager.cpp" />
-    <ClCompile Include="src\scene_shading.cpp" />
+    <ClCompile Include="src\scene_minecraft.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Math\Math.vcxproj">
@@ -108,11 +109,12 @@ xcopy "$(ProjectDir)assets" "$(ProjectDir)..\bin\Minecraft\assets\" /Y</Command>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\body.h" />
     <ClInclude Include="include\depth_buffer.h" />
     <ClInclude Include="include\perlin_noise.h" />
     <ClInclude Include="include\scene.h" />
     <ClInclude Include="include\scene_manager.h" />
-    <ClInclude Include="include\scene_shading.h" />
+    <ClInclude Include="include\scene_minecraft.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\cube_shading.vert" />

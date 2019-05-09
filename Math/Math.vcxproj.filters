@@ -39,6 +39,9 @@
     <ClInclude Include="include\vec3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\vec3i.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\complex.cpp">
@@ -63,6 +66,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\vec3d.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vec3i.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
