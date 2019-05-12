@@ -17,10 +17,10 @@ uniform vec3 u_light_position;
 uniform mat3 u_normal_matrix;
 uniform vec3 u_camera_position;
 uniform vec2 u_poisson_disk[64];
+uniform vec2 u_resolution;
 
 uniform sampler2D u_texture1;
 uniform sampler2D u_light_texture;
-
 
 float random(vec4 seed){
     float dot_product = dot(seed, vec4(12.9898,78.233,45.164,94.673));
@@ -69,8 +69,7 @@ float is_between(float left, float x, float right){
 
 void main()
 {
-	vec2 resolution = vec2(800.0, 800.0);
-	if(step(0.005, length(gl_FragCoord.xy/resolution - vec2(0.5, 0.5))) == 0.0){
+	if(step(0.005, length(gl_FragCoord.xy/u_resolution - vec2(0.5, 0.5))) == 0.0){
 		FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 		return;
 	}

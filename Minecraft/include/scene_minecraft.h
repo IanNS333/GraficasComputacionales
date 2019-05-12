@@ -115,6 +115,7 @@ private:
 	GLuint normal_matrix_location;
 	GLuint camera_position_location;
 	GLuint shadow_light_mvp_location;
+	GLuint resolution_location;
 
 	GLuint light_mvp_location;
 
@@ -123,9 +124,6 @@ private:
 
 	ILuint imageId;
 	GLuint textureId;
-
-	int width = 400;
-	int height = 400;
 
 	const sheet_texture GRASS_TEXTURE = { 8, 11, 7, 10, 7, 9 };
 	const sheet_texture DARK_GRASS_TEXTURE = { 10, 11, 10, 10, 7, 9 };
@@ -149,7 +147,6 @@ private:
 	vector<vec3> offsets;
 	mutex map_mutex;
 	
-
 	int coords_to_offset_index[MAP_SIZE + 1][MAP_SIZE + 1][MAP_HEIGHT + 1];
 
 	short blocks[MAP_SIZE + 1][MAP_SIZE + 1][MAP_HEIGHT + 1];

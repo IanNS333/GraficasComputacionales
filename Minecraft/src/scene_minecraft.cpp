@@ -88,6 +88,7 @@ void scene_minecraft::compile_shaders() {
     light_position_location = glGetUniformLocation(shader_program, "u_light_position");
     light_color_location = glGetUniformLocation(shader_program, "u_light_color");
     camera_position_location = glGetUniformLocation(shader_program, "u_camera.position");
+	resolution_location = glGetUniformLocation(shader_program, "u_resolution");
 
 	shadow_light_mvp_location = glGetUniformLocation(shader_program, "u_light_mvp_matrix");
 
@@ -95,6 +96,7 @@ void scene_minecraft::compile_shaders() {
 	glUniform2fv(poisson_location, 64, &(poisson_disk[0][0]));
 
     glUniform3f(light_color_location, 1.0f, 1.0f, 1.0f);
+	glUniform2f(resolution_location, 800, 800);
 
     glUseProgram(0);
 }
@@ -298,6 +300,9 @@ void scene_minecraft::make_near_blocks_visible(int i, int j, int k) {
 }
 
 void scene_minecraft::add_block(int i, int j, int k, int type) {
+
+	if (coords_to_offset_index[i][j][k] != 0) return;
+
 	map_mutex.lock();
 	blocks[i][j][k] = type;
 
@@ -342,12 +347,10 @@ void scene_minecraft::generate_tree(int i, int j, int k, int biome) {
 
 	int height = int(randf() * 3.0f + 4.0f);
 
-	map_mutex.lock();
 	for (int h = k; h < k+height; h++) {
 		blocks[i][j][h] = wood;
 	}
 	blocks[i][j][k + height] = leaves;
-	map_mutex.unlock();
 
 	int width = height;
 	if (width % 2 == 0) {
@@ -363,9 +366,7 @@ void scene_minecraft::generate_tree(int i, int j, int k, int biome) {
 					continue;
 				}
 				if (randf() < 0.7f && blocks[i+a][j+b][k+h+height] == 0) {
-					map_mutex.lock();
 					blocks[i+a][j+b][k+h+height] = leaves;
-					map_mutex.unlock();
 				}
 			}
 		}
@@ -397,9 +398,7 @@ void scene_minecraft::generate_map() {
     for (int i = 0; i <= MAP_SIZE; i++) {
         for (int j = 0; j <= MAP_SIZE; j++) {
             for (int k = 0; k <= MAP_HEIGHT; k++) {
-				map_mutex.lock();
                 blocks[i][j][k] = 0;
-				map_mutex.unlock();
             }
         }
     }
@@ -440,7 +439,6 @@ void scene_minecraft::generate_map() {
 				dirt = DIRT_TYPE;
 			}
 
-			map_mutex.lock();
             for (int k = height; k >= 0; k--) {
 				 if (blocks[i][j][k + 1] == 0) {
                     blocks[i][j][k] = grass;
@@ -456,7 +454,7 @@ void scene_minecraft::generate_map() {
 					blocks[i][j][k] = WATER_TYPE;
 				}
 			}
-			map_mutex.unlock();
+
 			if (randf() < 0.01) {
 				generate_tree(i, j,height + 1, biome);
 			}
@@ -714,11 +712,6 @@ vector<vec3> scene_minecraft::voxels(const vec3& ray, const vec3& origin) {
 }
 
 void scene_minecraft::update_map(std::atomic<bool>& program_is_running) {
-	
-	vector<vec3> m_offsets;
-	vector<vec2> m_texture_up_coords;
-	vector<vec2> m_texture_side_coords;
-	vector<vec2> m_texture_down_coords;
 
 	int start_x, end_x;
 	int start_z, end_z;
@@ -726,16 +719,6 @@ void scene_minecraft::update_map(std::atomic<bool>& program_is_running) {
 	int i, j, k, type;
 
 	while (program_is_running) {
-
-		m_offsets.clear();
-		m_texture_up_coords.clear();
-		m_texture_side_coords.clear();
-		m_texture_down_coords.clear();
-
-		m_offsets.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
-		m_texture_up_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
-		m_texture_side_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
-		m_texture_down_coords.reserve(RENDER_DISTANCE*RENDER_DISTANCE * 3);
 
 		start_x = max(int(camera.position.x - RENDER_DISTANCE), 0);
 		end_x = min(int(camera.position.x + RENDER_DISTANCE), MAP_SIZE);
@@ -747,30 +730,14 @@ void scene_minecraft::update_map(std::atomic<bool>& program_is_running) {
 				for (j = start_z; j <= end_z; j++) {
 					in_range = (vec3(i, 0.0f, j) - vec3(camera.position.x, 0.0f, camera.position.z)).magnitude() < RENDER_DISTANCE;
 
-					coords_to_offset_index[i][j][k] = 0;
 					if (in_range && blocks[i][j][k] != 0 && is_block_visible(i, j, k)) {
 						type = blocks[i][j][k] - 1;
 
-						m_texture_up_coords.push_back(get_texture_coords(textures[type].x_up, textures[type].y_up));
-						m_texture_side_coords.push_back(get_texture_coords(textures[type].x_side, textures[type].y_side));
-						m_texture_down_coords.push_back(get_texture_coords(textures[type].x_down, textures[type].y_down));
-
-						coords_to_offset_index[i][j][k] = m_offsets.size();
-						//m_offsets.push_back(vec3(i, k, j));
-						m_offsets.push_back(vec3(i + 0.5f, k + 0.5f, j + 0.5f));
+						add_block(i, j, k, blocks[i][j][k]);
 					}
 				}
 			}
 		}
-
-		std::cout << "updated" << std::endl;
-
-		map_mutex.lock();
-		offsets = m_offsets;
-		texture_up_coords = m_texture_up_coords;
-		texture_side_coords = m_texture_side_coords;
-		texture_down_coords = m_texture_down_coords;
-		map_mutex.unlock();
 	}
 }
 
@@ -798,8 +765,6 @@ void scene_minecraft::mainLoop() {
 }
 
 void scene_minecraft::resize(int width, int height) {
-    this->width = width;
-    this->height = height;
 
     glViewport(0, 0, width, height);
 
@@ -814,14 +779,14 @@ void scene_minecraft::resize(int width, int height) {
         {0.0f, 0.0f, -1.0f, 0.0f},
     });
 
+	glUniform2f(resolution_location, width, height);
+
     glUseProgram(0);
-    this->width = width;
-    this->height = height;
 }
 
 void scene_minecraft::handle_gravity() {
 
-	float delta_time = time::delta_time().count();
+	float delta_time = min(time::delta_time().count(), 0.03f);
 
 	camera.velocity += vec3(0.0f, -10.0f, 0.0f) * delta_time;
 
@@ -832,6 +797,7 @@ void scene_minecraft::handle_gravity() {
 	bool collision;
 	
 	vector<vec3i> collision_blocks;
+	vector<vec3i> ceil_collision_blocks;
 	new_camera.position = camera.position - (camera.dimensions / 2.0f) - vec3(0.0f, 0.75f, 0.0f);
 
 	next_block = vec3i(new_camera.position);
@@ -865,15 +831,15 @@ void scene_minecraft::handle_gravity() {
 	collision_blocks.push_back({ next_block.x + 1, next_block.y - 1, next_block.z });
 	collision_blocks.push_back({ next_block.x + 1, next_block.y - 1, next_block.z + 1 });
 
-	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z - 1 });
-	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z });
-	collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z + 1 });
-	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z - 1 });
-	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z });
-	collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z + 1 });
-	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z - 1 });
-	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z });
-	collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z + 1 });
+	ceil_collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z - 1 });
+	ceil_collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z });
+	ceil_collision_blocks.push_back({ next_block.x - 1, next_block.y + 2, next_block.z + 1 });
+	ceil_collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z - 1 });
+	ceil_collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z });
+	ceil_collision_blocks.push_back({ next_block.x  , next_block.y + 2, next_block.z + 1 });
+	ceil_collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z - 1 });
+	ceil_collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z });
+	ceil_collision_blocks.push_back({ next_block.x + 1, next_block.y + 2, next_block.z + 1 });
 
 	for (int i = 0; i < 3; i++) {
 		if (new_camera.velocity[i] == 0.0f) {
@@ -891,10 +857,26 @@ void scene_minecraft::handle_gravity() {
 					{ 0.0f, 0.0f, 0.0f }
 				));
 				if (collision) {
-					camera.velocity[i] = 0;
-					if (i == 1 && up_input) {
+					if (i == 1 && up_input){
 						camera.velocity.y = 5.0f;
 					}
+					else {
+						camera.velocity[i] = 0;
+					}
+				}
+			}
+		}
+
+		for (auto &collision_block : ceil_collision_blocks) {
+			block = blocks[collision_block.x][collision_block.z][collision_block.y];
+			if (block != 0 && block != WATER_TYPE) {
+				collision = body::check_collision(new_camera, body(
+					collision_block,
+					{ 1.0f, 1.0f, 1.0f },
+					{ 0.0f, 0.0f, 0.0f }
+				));
+				if (collision) {
+					camera.velocity[i] = 0;
 				}
 			}
 		}
@@ -908,7 +890,7 @@ void scene_minecraft::handle_gravity() {
 }
 
 void scene_minecraft::handle_rotation() {
-    float delta_time = time::delta_time().count();
+	float delta_time = min(time::delta_time().count(), 0.03f);
 
 	yaw_input = delta_x;
 	pitch_input = delta_y;
